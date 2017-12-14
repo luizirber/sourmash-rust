@@ -113,17 +113,21 @@ impl KmerMinHash {
         }
     }
 
-    pub fn merge(&mut self, other: KmerMinHash) -> Vec<u64> {
+    pub fn merge(&mut self, other: &KmerMinHash) -> Vec<u64> {
         // self.check_compatible(other);
         let mut merged: Vec<u64> = Vec::with_capacity(self.mins.len() + other.mins.len());
         let mut self_iter = self.mins.iter();
         let mut other_iter = other.mins.iter();
 
-        let mut self_value = self_iter.next().unwrap();
-        loop {
-            if Some(self_value) == None {
-                break;
+        let mut self_value = match self_iter.next() {
+            Some(x) => x,
+            None => {
+                merged.extend(other_iter);
+                return merged
             }
+        };
+
+        loop {
             match other_iter.next() {
                 None => {
                     merged.extend(self_iter);
@@ -133,10 +137,18 @@ impl KmerMinHash {
                 Some(x) if x == self_value => {
                     merged.push(*x);
                     // TODO: sum abunds
-                    self_value = self_iter.next().unwrap()},
+                    self_value = match self_iter.next() {
+                        None => break,
+                        Some(x) => x
+                      }
+                    },
                 Some(x) if x > self_value => {
                     merged.push(*self_value);
-                    self_value = self_iter.next().unwrap()},
+                    self_value = match self_iter.next() {
+                        None => break,
+                        Some(x) => x
+                      }
+                    },
                 Some(_) => {}
             }
         }
