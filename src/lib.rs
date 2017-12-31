@@ -1,8 +1,23 @@
 extern crate murmurhash3;
 extern crate ordslice;
+extern crate backtrace;
+
+#[macro_use]
+extern crate error_chain;
+
+#[macro_use]
+pub mod errors;
+
+#[macro_use]
+pub mod ffi;
+
+use std::collections::HashSet;
+use std::iter::FromIterator;
 
 use murmurhash3::murmurhash3_x64_128;
 use ordslice::Ext;
+
+use errors::{ErrorKind, Result};
 
 pub fn _hash_murmur(kmer: &[u8], seed: u64) -> u64 {
     murmurhash3_x64_128(kmer, seed).0
@@ -52,10 +67,8 @@ impl KmerMinHash {
          Some(&x) => x,
          None => u64::max_value(),
        };
-       println!("{}", current_max);
 
        if (self.max_hash != 0 && hash <= self.max_hash) || self.max_hash == 0 {
-           println!("adding {}", current_max);
            if self.mins.len() == 0 {
              self.mins.push(hash);
              return
@@ -82,35 +95,35 @@ impl KmerMinHash {
         self.add_hash(hash);
     }
 
-    pub fn add_sequence(&mut self, sequence: &[u8], force: bool) {
-        if sequence.len() < (self.ksize as usize) {
-            return
-        }
+    pub fn add_sequence(&mut self, sequence: &[u8], force: bool) -> Result<()> {
+        if sequence.len() >= (self.ksize as usize) {
+            if !self.is_protein { // dna
+                for kmer in sequence.windows(self.ksize as usize) {
+                    _checkdna(kmer, force)?;
+                    let rc = revcomp(kmer);
+                    if kmer < &rc {
+                        self.add_word(&kmer);
+                    } else {
+                        self.add_word(&rc);
+                    }
+                }
+            } else {  // protein
+                for (kmer, rc) in sequence.windows((self.ksize * 3) as usize).zip(
+                                  revcomp(sequence).windows((self.ksize * 3) as usize)) {
+                    let aa_kmer = to_aa(kmer);
+                    let aa_rc = to_aa(rc);
 
-        if !self.is_protein { // dna
-            for kmer in sequence.windows(self.ksize as usize) {
-                let rc = revcomp(kmer);
-                if kmer < &rc {
-                    self.add_word(&kmer);
-                } else {
-                    self.add_word(&rc);
+                    println!("{:?} {:?}, {:?} {:?}", kmer, aa_kmer, rc, aa_rc);
+
+                    if aa_kmer < aa_rc {
+                        self.add_word(&aa_kmer);
+                    } else {
+                        self.add_word(&aa_rc);
+                    }
                 }
             }
-        } else {  // protein
-            for (kmer, rc) in sequence.windows((self.ksize * 3) as usize).zip(
-                              revcomp(sequence).windows((self.ksize * 3) as usize)) {
-                let aa_kmer = to_aa(kmer);
-                let aa_rc = to_aa(rc);
-
-                println!("{:?} {:?}, {:?} {:?}", kmer, aa_kmer, rc, aa_rc);
-
-                if aa_kmer < aa_rc {
-                    self.add_word(&aa_kmer);
-                } else {
-                    self.add_word(&aa_rc);
-                }
-            }
         }
+        Ok(())
     }
 
     pub fn merge(&mut self, other: &KmerMinHash) -> Vec<u64> {
@@ -119,8 +132,8 @@ impl KmerMinHash {
         let mut self_iter = self.mins.iter();
         let mut other_iter = other.mins.iter();
 
-        let mut self_value = match self_iter.next() {
-            Some(x) => x,
+        let mut self_value: u64 = match self_iter.next() {
+            Some(x) => *x,
             None => {
                 merged.extend(other_iter);
                 return merged
@@ -130,23 +143,24 @@ impl KmerMinHash {
         loop {
             match other_iter.next() {
                 None => {
+                    merged.push(self_value);
                     merged.extend(self_iter);
                     // TODO: copy abunds too
                     break },
-                Some(x) if x < self_value => merged.push(*x),
-                Some(x) if x == self_value => {
+                Some(x) if *x < self_value => merged.push(*x),
+                Some(x) if *x == self_value => {
                     merged.push(*x);
                     // TODO: sum abunds
                     self_value = match self_iter.next() {
                         None => break,
-                        Some(x) => x
+                        Some(x) => *x
                       }
                     },
-                Some(x) if x > self_value => {
-                    merged.push(*self_value);
+                Some(x) if *x > self_value => {
+                    merged.push(self_value);
                     self_value = match self_iter.next() {
                         None => break,
-                        Some(x) => x
+                        Some(x) => *x
                       }
                     },
                 Some(_) => {}
@@ -154,7 +168,20 @@ impl KmerMinHash {
         }
         merged.extend(other_iter);
 
-        merged
+        if merged.len() < (self.num as usize) || (self.num as usize) == 0 {
+            return merged
+        } else {
+            return merged.iter()
+                         .map(|&x| x as u64)
+                         .take(self.num as usize)
+                         .collect()
+        }
+    }
+
+    pub fn count_common(&mut self, other: &KmerMinHash) -> u64 {
+        let s1: HashSet<&u64> = HashSet::from_iter(self.mins.iter());
+        let s2: HashSet<&u64> = HashSet::from_iter(other.mins.iter());
+        s1.intersection(&s2).count() as u64
     }
 }
 
@@ -184,4 +211,18 @@ fn to_aa(seq: &[u8]) -> Vec<u8> {
              x => x
             } as u8) // TODO: error?
        .collect()
+}
+
+#[inline]
+fn _checkdna(seq: &[u8], force: bool) -> Result<()> {
+    for n in seq.iter() {
+       match *n as char {
+           'A' | 'a' | 'C' | 'c' | 'G' | 'g' | 'T' | 't' => {},
+           x => { if ! force {
+                   return Err(ErrorKind::InvalidDNA(x.to_string()).into());
+                  }
+                }
+       }
+    }
+    Ok(())
 }
