@@ -8,8 +8,7 @@ extern crate error_chain;
 #[macro_use]
 pub mod errors;
 
-#[macro_use]
-pub mod ffi;
+#[macro_use] pub mod ffi;
 
 use std::collections::HashSet;
 use std::iter::FromIterator;

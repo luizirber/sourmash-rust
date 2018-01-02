@@ -1,11 +1,11 @@
 [package]
 name = "sourmash"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Luiz Irber <luiz.irber@gmail.com>"]
 
 [lib]
 name = "sourmash"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]
 
 [build-dependencies]
 cbindgen = "0.3.3"

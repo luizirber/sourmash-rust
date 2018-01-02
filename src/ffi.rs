@@ -17,6 +17,35 @@ thread_local! {
     pub static LAST_BACKTRACE: RefCell<Option<(Option<String>, Backtrace)>> = RefCell::new(None);
 }
 
+macro_rules! ffi_fn (
+    // a function that catches panics and returns a result (err goes to tls)
+    (
+        $(#[$attr:meta])*
+        unsafe fn $name:ident($($aname:ident: $aty:ty),* $(,)*) -> Result<$rv:ty> $body:block
+    ) => (
+        #[no_mangle]
+        $(#[$attr])*
+        pub unsafe extern "C" fn $name($($aname: $aty,)*) -> $rv
+        {
+            $crate::ffi::landingpad(|| $body)
+        }
+    );
+
+    // a function that catches panics and returns nothing (err goes to tls)
+    (
+        $(#[$attr:meta])*
+        unsafe fn $name:ident($($aname:ident: $aty:ty),* $(,)*) $body:block
+    ) => {
+        #[no_mangle]
+        $(#[$attr])*
+        pub unsafe extern "C" fn $name($($aname: $aty,)*)
+        {
+            // this silences panics and stuff
+            $crate::ffi::landingpad(|| { $body; Ok(0 as ::std::os::raw::c_int) });
+        }
+    }
+);
+
 #[no_mangle]
 pub extern "C" fn hash_murmur(kmer: *const c_char, seed: u64) -> u64 {
     let c_str = unsafe {
@@ -41,8 +70,8 @@ pub extern "C" fn kmerminhash_free(ptr: *mut KmerMinHash) {
     unsafe { Box::from_raw(ptr); }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn kmerminhash_add_sequence(ptr: *mut KmerMinHash, sequence: *const c_char, force: bool) {
+ffi_fn! {
+unsafe fn kmerminhash_add_sequence(ptr: *mut KmerMinHash, sequence: *const c_char, force: bool) {
     let mh = {
         assert!(!ptr.is_null());
         &mut *ptr
@@ -54,6 +83,7 @@ pub unsafe extern "C" fn kmerminhash_add_sequence(ptr: *mut KmerMinHash, sequenc
     };
 
     mh.add_sequence(c_str.to_bytes(), force);
+}
 }
 
 #[no_mangle]
@@ -266,31 +296,3 @@ pub unsafe fn landingpad<F: FnOnce() -> Result<T> + panic::UnwindSafe, T>(
     }
 }
 
-macro_rules! ffi_fn (
-    // a function that catches panics and returns a result (err goes to tls)
-    (
-        $(#[$attr:meta])*
-        unsafe fn $name:ident($($aname:ident: $aty:ty),* $(,)*) -> Result<$rv:ty> $body:block
-    ) => (
-        #[no_mangle]
-        $(#[$attr])*
-        pub unsafe extern "C" fn $name($($aname: $aty,)*) -> $rv
-        {
-            $crate::utils::landingpad(|| $body)
-        }
-    );
-
-    // a function that catches panics and returns nothing (err goes to tls)
-    (
-        $(#[$attr:meta])*
-        unsafe fn $name:ident($($aname:ident: $aty:ty),* $(,)*) $body:block
-    ) => {
-        #[no_mangle]
-        $(#[$attr])*
-        pub unsafe extern "C" fn $name($($aname: $aty,)*)
-        {
-            // this silences panics and stuff
-            $crate::utils::landingpad(|| { $body; Ok(0 as ::std::os::raw::c_int) });
-        }
-    }
-);
