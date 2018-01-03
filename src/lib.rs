@@ -98,12 +98,17 @@ impl KmerMinHash {
         if sequence.len() >= (self.ksize as usize) {
             if !self.is_protein { // dna
                 for kmer in sequence.windows(self.ksize as usize) {
-                    _checkdna(kmer, force)?;
-                    let rc = revcomp(kmer);
-                    if kmer < &rc {
-                        self.add_word(&kmer);
+                    if _checkdna(kmer) {
+                        let rc = revcomp(kmer);
+                        if kmer < &rc {
+                            self.add_word(&kmer);
+                        } else {
+                            self.add_word(&rc);
+                        }
                     } else {
-                        self.add_word(&rc);
+                      if ! force {
+                          return Err(ErrorKind::InvalidDNA(kmer[kmer.len() - 1].to_string()).into());
+                      }
                     }
                 }
             } else {  // protein
@@ -213,15 +218,12 @@ fn to_aa(seq: &[u8]) -> Vec<u8> {
 }
 
 #[inline]
-fn _checkdna(seq: &[u8], force: bool) -> Result<()> {
+fn _checkdna(seq: &[u8]) -> bool {
     for n in seq.iter() {
        match *n as char {
-           'A' | 'a' | 'C' | 'c' | 'G' | 'g' | 'T' | 't' => {},
-           x => { if ! force {
-                   return Err(ErrorKind::InvalidDNA(x.to_string()).into());
-                  }
-                }
+           'A' | 'a' | 'C' | 'c' | 'G' | 'g' | 'T' | 't' => (),
+           _ => return false
        }
     }
-    Ok(())
+    true
 }

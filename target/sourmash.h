@@ -1,22 +1,27 @@
+/* c bindings to the sourmash library */
+
+#ifndef SOURMASH_H_INCLUDED
+#define SOURMASH_H_INCLUDED
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
 enum SourmashErrorCode {
-  NoError = 0,
-  Panic = 1,
-  Internal = 2,
-  Msg = 3,
-  Unknown = 4,
-  MismatchKSizes = 101,
-  MismatchDNAProt = 102,
-  MismatchMaxHash = 103,
-  MismatchSeed = 104,
-  InvalidDNA = 1101,
-  InvalidProt = 1102,
-  Io = 100001,
-  Utf8Error = 100002,
-  ParseInt = 100003,
+  SOURMASH_ERROR_CODE_NO_ERROR = 0,
+  SOURMASH_ERROR_CODE_PANIC = 1,
+  SOURMASH_ERROR_CODE_INTERNAL = 2,
+  SOURMASH_ERROR_CODE_MSG = 3,
+  SOURMASH_ERROR_CODE_UNKNOWN = 4,
+  SOURMASH_ERROR_CODE_MISMATCH_K_SIZES = 101,
+  SOURMASH_ERROR_CODE_MISMATCH_D_N_A_PROT = 102,
+  SOURMASH_ERROR_CODE_MISMATCH_MAX_HASH = 103,
+  SOURMASH_ERROR_CODE_MISMATCH_SEED = 104,
+  SOURMASH_ERROR_CODE_INVALID_D_N_A = 1101,
+  SOURMASH_ERROR_CODE_INVALID_PROT = 1102,
+  SOURMASH_ERROR_CODE_IO = 100001,
+  SOURMASH_ERROR_CODE_UTF8_ERROR = 100002,
+  SOURMASH_ERROR_CODE_PARSE_INT = 100003,
 };
 typedef uint32_t SourmashErrorCode;
 
@@ -73,3 +78,5 @@ SourmashErrorCode sourmash_err_get_last_code();
  * Initializes the library
  */
 void sourmash_init();
+
+#endif /* SOURMASH_H_INCLUDED */

@@ -13,7 +13,6 @@ use errors::{ErrorKind, Error, Result, SourmashErrorCode};
 
 thread_local! {
     pub static LAST_ERROR: RefCell<Option<Error>> = RefCell::new(None);
-    pub static LAST_PANIC: RefCell<Option<(String, Backtrace)>> = RefCell::new(None);
     pub static LAST_BACKTRACE: RefCell<Option<(Option<String>, Backtrace)>> = RefCell::new(None);
 }
 
@@ -71,7 +70,8 @@ pub extern "C" fn kmerminhash_free(ptr: *mut KmerMinHash) {
 }
 
 ffi_fn! {
-unsafe fn kmerminhash_add_sequence(ptr: *mut KmerMinHash, sequence: *const c_char, force: bool) {
+unsafe fn kmerminhash_add_sequence(ptr: *mut KmerMinHash, sequence: *const c_char, force: bool) ->
+    Result<()> {
     let mh = {
         assert!(!ptr.is_null());
         &mut *ptr
@@ -82,7 +82,7 @@ unsafe fn kmerminhash_add_sequence(ptr: *mut KmerMinHash, sequence: *const c_cha
         CStr::from_ptr(sequence)
     };
 
-    mh.add_sequence(c_str.to_bytes(), force);
+    mh.add_sequence(c_str.to_bytes(), force)
 }
 }
 
@@ -204,6 +204,11 @@ pub extern "C" fn kmerminhash_count_common(ptr: *mut KmerMinHash, other: *const 
 }
 
 fn notify_err(err: Error) {
+    if let Some(backtrace) = err.backtrace() {
+        LAST_BACKTRACE.with(|e| {
+            *e.borrow_mut() = Some((None, backtrace.clone()));
+        });
+    }
     LAST_ERROR.with(|e| {
         *e.borrow_mut() = Some(err);
     });
@@ -267,8 +272,8 @@ pub unsafe fn set_panic_hook() {
             }
         };
 
-        LAST_PANIC.with(|e| {
-            *e.borrow_mut() = Some((panic_info, backtrace));
+        LAST_BACKTRACE.with(|e| {
+            *e.borrow_mut() = Some((Some(panic_info), backtrace));
         });
     }));
 }
@@ -295,4 +300,3 @@ pub unsafe fn landingpad<F: FnOnce() -> Result<T> + panic::UnwindSafe, T>(
         }
     }
 }
-
