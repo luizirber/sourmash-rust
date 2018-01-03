@@ -4,7 +4,7 @@ use std::str;
 use std::slice;
 use std::mem;
 use std::os::raw::c_char;
-use ::{_hash_murmur, KmerMinHash};
+use {_hash_murmur, KmerMinHash};
 
 use std::panic;
 use std::thread;
@@ -12,7 +12,7 @@ use std::cell::RefCell;
 
 use backtrace::Backtrace;
 
-use errors::{ErrorKind, Error, Result, SourmashErrorCode};
+use errors::{Error, ErrorKind, Result, SourmashErrorCode};
 
 thread_local! {
     pub static LAST_ERROR: RefCell<Option<Error>> = RefCell::new(None);
@@ -60,16 +60,32 @@ pub extern "C" fn hash_murmur(kmer: *const c_char, seed: u64) -> u64 {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn kmerminhash_new(n: u32, k: u32, prot: bool,
-                                         seed: u64, mx: u64, track_abundance: bool)
-                                         -> *mut KmerMinHash {
-    mem::transmute(Box::new(KmerMinHash::new(n, k, prot, seed, mx, track_abundance)))
+pub unsafe extern "C" fn kmerminhash_new(
+    n: u32,
+    k: u32,
+    prot: bool,
+    seed: u64,
+    mx: u64,
+    track_abundance: bool,
+) -> *mut KmerMinHash {
+    mem::transmute(Box::new(KmerMinHash::new(
+        n,
+        k,
+        prot,
+        seed,
+        mx,
+        track_abundance,
+    )))
 }
 
 #[no_mangle]
 pub extern "C" fn kmerminhash_free(ptr: *mut KmerMinHash) {
-    if ptr.is_null() { return }
-    unsafe { Box::from_raw(ptr); }
+    if ptr.is_null() {
+        return;
+    }
+    unsafe {
+        Box::from_raw(ptr);
+    }
 }
 
 ffi_fn! {
@@ -195,7 +211,8 @@ unsafe fn kmerminhash_merge(ptr: *mut KmerMinHash, other: *const KmerMinHash) ->
 }
 
 ffi_fn! {
-unsafe fn kmerminhash_count_common(ptr: *mut KmerMinHash, other: *const KmerMinHash) -> Result<u64> {
+unsafe fn kmerminhash_count_common(ptr: *mut KmerMinHash, other: *const KmerMinHash)
+    -> Result<u64> {
     let mh = {
         assert!(!ptr.is_null());
         &mut *ptr
