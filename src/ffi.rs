@@ -104,6 +104,24 @@ pub extern "C" fn kmerminhash_get_mins_size(ptr: *mut KmerMinHash) -> usize {
 }
 
 #[no_mangle]
+pub extern "C" fn kmerminhash_get_abund_idx(ptr: *mut KmerMinHash, idx: u64) -> u64 {
+    let mh = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    mh.abunds[idx as usize]
+}
+
+#[no_mangle]
+pub extern "C" fn kmerminhash_get_abunds_size(ptr: *mut KmerMinHash) -> usize {
+    let mh = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    mh.abunds.len()
+}
+
+#[no_mangle]
 pub extern "C" fn kmerminhash_is_protein(ptr: *mut KmerMinHash) -> bool {
     let mh = unsafe {
         assert!(!ptr.is_null());

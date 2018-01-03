@@ -48,6 +48,10 @@ uint64_t kmerminhash_count_common(KmerMinHash *ptr, const KmerMinHash *other);
 
 void kmerminhash_free(KmerMinHash *ptr);
 
+uint64_t kmerminhash_get_abund_idx(KmerMinHash *ptr, uint64_t idx);
+
+size_t kmerminhash_get_abunds_size(KmerMinHash *ptr);
+
 uint64_t kmerminhash_get_min_idx(KmerMinHash *ptr, uint64_t idx);
 
 size_t kmerminhash_get_mins_size(KmerMinHash *ptr);
