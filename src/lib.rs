@@ -61,6 +61,22 @@ impl KmerMinHash {
         }
     }
 
+    pub fn check_compatible(&mut self, other: &KmerMinHash) -> Result<bool> {
+        if self.ksize != other.ksize {
+            return Err(ErrorKind::MismatchKSizes.into());
+        }
+        if self.is_protein != other.is_protein {
+            return Err(ErrorKind::MismatchDNAProt.into());
+        }
+        if self.max_hash != other.max_hash {
+            return Err(ErrorKind::MismatchMaxHash.into());
+        }
+        if self.seed != other.seed {
+            return Err(ErrorKind::MismatchSeed.into());
+        }
+        Ok(true)
+    }
+
     pub fn add_hash(&mut self, hash: u64) {
        let current_max = match self.mins.last() {
          Some(&x) => x,
@@ -107,7 +123,8 @@ impl KmerMinHash {
                         }
                     } else {
                       if ! force {
-                          return Err(ErrorKind::InvalidDNA(kmer[kmer.len() - 1].to_string()).into());
+                          let last = vec![kmer.last().cloned().unwrap()];
+                          return Err(ErrorKind::InvalidDNA(String::from_utf8(last).unwrap()).into());
                       }
                     }
                 }
@@ -117,7 +134,7 @@ impl KmerMinHash {
                     let aa_kmer = to_aa(kmer);
                     let aa_rc = to_aa(rc);
 
-                    println!("{:?} {:?}, {:?} {:?}", kmer, aa_kmer, rc, aa_rc);
+                    //println!("{:?} {:?}, {:?} {:?}", kmer, aa_kmer, rc, aa_rc);
 
                     if aa_kmer < aa_rc {
                         self.add_word(&aa_kmer);
@@ -130,8 +147,8 @@ impl KmerMinHash {
         Ok(())
     }
 
-    pub fn merge(&mut self, other: &KmerMinHash) -> Vec<u64> {
-        // self.check_compatible(other);
+    pub fn merge(&mut self, other: &KmerMinHash) -> Result<Vec<u64>> {
+        self.check_compatible(other)?;
         let mut merged: Vec<u64> = Vec::with_capacity(self.mins.len() + other.mins.len());
         let mut self_iter = self.mins.iter();
         let mut other_iter = other.mins.iter();
@@ -140,7 +157,7 @@ impl KmerMinHash {
             Some(x) => *x,
             None => {
                 merged.extend(other_iter);
-                return merged
+                return Ok(merged)
             }
         };
 
@@ -173,19 +190,20 @@ impl KmerMinHash {
         merged.extend(other_iter);
 
         if merged.len() < (self.num as usize) || (self.num as usize) == 0 {
-            return merged
+            return Ok(merged)
         } else {
-            return merged.iter()
-                         .map(|&x| x as u64)
-                         .take(self.num as usize)
-                         .collect()
+            return Ok(merged.iter()
+                            .map(|&x| x as u64)
+                            .take(self.num as usize)
+                            .collect())
         }
     }
 
-    pub fn count_common(&mut self, other: &KmerMinHash) -> u64 {
+    pub fn count_common(&mut self, other: &KmerMinHash) -> Result<u64> {
+        self.check_compatible(other)?;
         let s1: HashSet<&u64> = HashSet::from_iter(self.mins.iter());
         let s2: HashSet<&u64> = HashSet::from_iter(other.mins.iter());
-        s1.intersection(&s2).count() as u64
+        Ok(s1.intersection(&s2).count() as u64)
     }
 }
 

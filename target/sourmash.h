@@ -27,6 +27,15 @@ typedef uint32_t SourmashErrorCode;
 
 typedef struct KmerMinHash KmerMinHash;
 
+/*
+ * Represents a string.
+ */
+typedef struct {
+  char *data;
+  size_t len;
+  bool owned;
+} SourmashStr;
+
 uint64_t hash_murmur(const char *kmer, uint64_t seed);
 
 void kmerminhash_add_hash(KmerMinHash *ptr, uint64_t h);
@@ -68,6 +77,11 @@ uint64_t kmerminhash_seed(KmerMinHash *ptr);
 void sourmash_err_clear();
 
 /*
+ * Returns the panic information as string.
+ */
+SourmashStr sourmash_err_get_backtrace();
+
+/*
  * Returns the last error code.
  *
  * If there is no error, 0 is returned.
@@ -75,8 +89,33 @@ void sourmash_err_clear();
 SourmashErrorCode sourmash_err_get_last_code();
 
 /*
+ * Returns the last error message.
+ *
+ * If there is no error an empty string is returned.  This allocates new memory
+ * that needs to be freed with `sourmash_str_free`.
+ */
+SourmashStr sourmash_err_get_last_message();
+
+/*
  * Initializes the library
  */
 void sourmash_init();
+
+/*
+ * Frees a sourmash str.
+ *
+ * If the string is marked as not owned then this function does not
+ * do anything.
+ */
+void sourmash_str_free(SourmashStr *s);
+
+/*
+ * Creates a sourmash str from a c string.
+ *
+ * This sets the string to owned.  In case it's not owned you either have
+ * to make sure you are not freeing the memory or you need to set the
+ * owned flag to false.
+ */
+SourmashStr sourmash_str_from_cstr(const char *s);
 
 #endif /* SOURMASH_H_INCLUDED */

@@ -1,4 +1,7 @@
 use std::ffi::CStr;
+use std::ptr;
+use std::str;
+use std::slice;
 use std::mem;
 use std::os::raw::c_char;
 use ::{_hash_murmur, KmerMinHash};
@@ -174,33 +177,36 @@ pub extern "C" fn kmerminhash_max_hash(ptr: *mut KmerMinHash) -> u64 {
     mh.max_hash
 }
 
-#[no_mangle]
-pub extern "C" fn kmerminhash_merge(ptr: *mut KmerMinHash, other: *const KmerMinHash) {
-    let mh = unsafe {
+ffi_fn! {
+unsafe fn kmerminhash_merge(ptr: *mut KmerMinHash, other: *const KmerMinHash) -> Result<()> {
+    let mh = {
         assert!(!ptr.is_null());
         &mut *ptr
     };
-    let other_mh = unsafe {
+    let other_mh = {
        assert!(!other.is_null());
        &*other
     };
 
-    let merged = mh.merge(other_mh);
-    mh.mins = merged
+    let merged = mh.merge(other_mh)?;
+    mh.mins = merged;
+    Ok(())
+}
 }
 
-#[no_mangle]
-pub extern "C" fn kmerminhash_count_common(ptr: *mut KmerMinHash, other: *const KmerMinHash) -> u64 {
-    let mh = unsafe {
+ffi_fn! {
+unsafe fn kmerminhash_count_common(ptr: *mut KmerMinHash, other: *const KmerMinHash) -> Result<u64> {
+    let mh = {
         assert!(!ptr.is_null());
         &mut *ptr
     };
-    let other_mh = unsafe {
+    let other_mh = {
        assert!(!other.is_null());
        &*other
     };
 
     mh.count_common(other_mh)
+}
 }
 
 fn notify_err(err: Error) {
@@ -212,6 +218,80 @@ fn notify_err(err: Error) {
     LAST_ERROR.with(|e| {
         *e.borrow_mut() = Some(err);
     });
+}
+
+/// Returns the last error message.
+///
+/// If there is no error an empty string is returned.  This allocates new memory
+/// that needs to be freed with `sourmash_str_free`.
+#[no_mangle]
+pub unsafe extern "C" fn sourmash_err_get_last_message() -> SourmashStr {
+    use std::fmt::Write;
+    use std::error::Error;
+    LAST_ERROR.with(|e| {
+        if let Some(ref err) = *e.borrow() {
+            let mut msg = err.to_string();
+            let mut cause = err.cause();
+            while let Some(the_cause) = cause {
+                write!(&mut msg, "\n  caused by: {}", the_cause).ok();
+                cause = the_cause.cause();
+            }
+            SourmashStr::from_string(msg)
+        } else {
+            Default::default()
+        }
+    })
+}
+
+/// Returns the panic information as string.
+#[no_mangle]
+pub unsafe extern "C" fn sourmash_err_get_backtrace() -> SourmashStr {
+    LAST_BACKTRACE.with(|e| {
+        if let Some((ref info, ref backtrace)) = *e.borrow() {
+            use std::fmt::Write;
+            let mut out = String::new();
+            if let &Some(ref info) = info {
+                write!(&mut out, "{}\n", info).ok();
+            }
+            write!(&mut out, "stacktrace:").ok();
+            let frames = backtrace.frames();
+            if frames.len() > 5 {
+                let mut done = false;
+                for frame in frames[6..].iter() {
+                    if done {
+                        break;
+                    }
+
+                    let ip = frame.ip();
+                    let symbols = frame.symbols();
+                    for symbol in symbols.iter() {
+                        write!(&mut out, "\n{:18?} ", ip).ok();
+
+                        if let Some(name) = symbol.name() {
+                            write!(&mut out, "{}", name).ok();
+                            // hack hack hack: make smaller stacktraces in case we are
+                            // a python binding.
+                            if name.as_bytes() == b"ffi_call" {
+                                done = true;
+                            }
+                        } else {
+                            write!(&mut out, "<unknown>").ok();
+                        }
+
+                        if let Some(file) = symbol.filename() {
+                            if let Some(filename) = file.file_name() {
+                                write!(&mut out, " ({}:{})", filename.to_string_lossy(),
+                                       symbol.lineno().unwrap_or(0)).ok();
+                            }
+                        }
+                    }
+                }
+            }
+            SourmashStr::from_string(out)
+        } else {
+            Default::default()
+        }
+    })
 }
 
 /// Clears the last error.
@@ -298,5 +378,87 @@ pub unsafe fn landingpad<F: FnOnce() -> Result<T> + panic::UnwindSafe, T>(
             notify_err(ErrorKind::Panic(msg.to_string()).into());
             mem::zeroed()
         }
+    }
+}
+
+/// Represents a string.
+#[repr(C)]
+pub struct SourmashStr {
+    pub data: *mut c_char,
+    pub len: usize,
+    pub owned: bool,
+}
+
+impl Default for SourmashStr {
+    fn default() -> SourmashStr {
+        SourmashStr {
+            data: ptr::null_mut(),
+            len: 0,
+            owned: false,
+        }
+    }
+}
+
+impl SourmashStr {
+    pub fn new(s: &str) -> SourmashStr {
+        SourmashStr {
+            data: s.as_ptr() as *mut c_char,
+            len: s.len(),
+            owned: false,
+        }
+    }
+
+    pub fn from_string(mut s: String) -> SourmashStr {
+        s.shrink_to_fit();
+        let rv = SourmashStr {
+            data: s.as_ptr() as *mut c_char,
+            len: s.len(),
+            owned: true,
+        };
+        mem::forget(s);
+        rv
+    }
+
+    pub unsafe fn free(&mut self) {
+        if self.owned {
+            String::from_raw_parts(self.data as *mut _, self.len, self.len);
+            self.data = ptr::null_mut();
+            self.len = 0;
+            self.owned = false;
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        unsafe {
+            str::from_utf8_unchecked(slice::from_raw_parts(
+                self.data as *const _, self.len))
+        }
+    }
+}
+
+ffi_fn! {
+    /// Creates a sourmash str from a c string.
+    ///
+    /// This sets the string to owned.  In case it's not owned you either have
+    /// to make sure you are not freeing the memory or you need to set the
+    /// owned flag to false.
+    unsafe fn sourmash_str_from_cstr(s: *const c_char) -> Result<SourmashStr> {
+        let s = CStr::from_ptr(s).to_str()?;
+        Ok(SourmashStr {
+            data: s.as_ptr() as *mut _,
+            len: s.len(),
+            owned: true,
+        })
+    }
+}
+
+/// Frees a sourmash str.
+///
+/// If the string is marked as not owned then this function does not
+/// do anything.
+#[no_mangle]
+pub unsafe extern "C" fn sourmash_str_free(s: *mut SourmashStr) {
+    if !s.is_null() {
+        (*s).free()
     }
 }

@@ -27,11 +27,11 @@ error_chain! {
         }
         InvalidDNA(message: String) {
             description("Invalid DNA character in input")
-            display("Invalid DNA character in input: {}", message)
+            display("invalid DNA character in input: {}", message)
         }
         InvalidProt(message: String) {
             description("Invalid protein character in input")
-            display("Invalid protein character in input: {}", message)
+            display("invalid protein character in input: {}", message)
         }
     }
 
