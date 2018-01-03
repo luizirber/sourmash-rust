@@ -133,10 +133,11 @@ impl KmerMinHash {
                             self.add_word(&rc);
                         }
                     } else {
-                      if ! force {
-                          let last = vec![kmer.last().cloned().unwrap()];
-                          return Err(ErrorKind::InvalidDNA(String::from_utf8(last).unwrap()).into());
-                      }
+                        if !force {
+                            let last = vec![kmer.last().cloned().unwrap()];
+                            return Err(ErrorKind::InvalidDNA(String::from_utf8(last).unwrap())
+                                .into());
+                        }
                     }
                 }
             } else {

@@ -195,9 +195,7 @@ pub unsafe fn set_panic_hook() {
     }));
 }
 
-pub unsafe fn landingpad<F: FnOnce() -> Result<T> + panic::UnwindSafe, T>(
-    f: F) -> T
-{
+pub unsafe fn landingpad<F: FnOnce() -> Result<T> + panic::UnwindSafe, T>(f: F) -> T {
     match panic::catch_unwind(f) {
         Ok(rv) => rv.map_err(|err| notify_err(err)).unwrap_or(mem::zeroed()),
         Err(err) => {
@@ -205,12 +203,10 @@ pub unsafe fn landingpad<F: FnOnce() -> Result<T> + panic::UnwindSafe, T>(
             let err = &*err as &Any;
             let msg = match err.downcast_ref::<&str>() {
                 Some(s) => *s,
-                None => {
-                    match err.downcast_ref::<String>() {
-                        Some(s) => &**s,
-                        None => "Box<Any>",
-                    }
-                }
+                None => match err.downcast_ref::<String>() {
+                    Some(s) => &**s,
+                    None => "Box<Any>",
+                },
             };
             notify_err(ErrorKind::Panic(msg.to_string()).into());
             mem::zeroed()
