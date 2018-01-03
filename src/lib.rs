@@ -9,6 +9,9 @@ extern crate error_chain;
 pub mod errors;
 
 #[macro_use]
+pub mod utils;
+
+#[macro_use]
 pub mod ffi;
 
 use std::collections::HashSet;
