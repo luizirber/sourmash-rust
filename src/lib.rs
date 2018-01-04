@@ -212,20 +212,19 @@ impl KmerMinHash {
 
         let mut self_value = self_iter.next();
         let mut other_value = other_iter.next();
-        while self_value != None {
-            println!("{:?}", self_value);
-            match Some(other_value) {
+        while !self_value.is_none() {
+            let value = self_value.unwrap();
+            match other_value {
                 None => {
+                    merged.push(*value);
                     merged.extend(self_iter);
                     if let Some(sai) = self_abunds_iter {
                         merged_abunds.extend(sai);
                     }
                     break;
                 }
-                Some(x) if x < self_value => {
-                    if let Some(v) = x {
-                        merged.push(*v);
-                    }
+                Some(x) if x < value => {
+                    merged.push(*x);
                     other_value = other_iter.next();
 
                     if let Some(ref mut oai) = other_abunds_iter {
@@ -234,10 +233,8 @@ impl KmerMinHash {
                         }
                     }
                 }
-                Some(x) if x == self_value => {
-                    if let Some(v) = x {
-                        merged.push(*v);
-                    }
+                Some(x) if x == value => {
+                    merged.push(*x);
                     other_value = other_iter.next();
                     self_value = self_iter.next();
 
@@ -251,10 +248,8 @@ impl KmerMinHash {
                         }
                     }
                 }
-                Some(x) if x > self_value => {
-                    if let Some(v) = self_value {
-                        merged.push(*v);
-                    }
+                Some(x) if x > value => {
+                    merged.push(*value);
                     self_value = self_iter.next();
 
                     if let Some(ref mut sai) = self_abunds_iter {
@@ -265,6 +260,9 @@ impl KmerMinHash {
                 }
                 Some(_) => {}
             }
+        }
+        if let Some(value) = other_value {
+            merged.push(*value);
         }
         merged.extend(other_iter);
         if let Some(oai) = other_abunds_iter {
