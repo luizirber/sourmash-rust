@@ -210,37 +210,37 @@ impl KmerMinHash {
             other_abunds_iter = None;
         }
 
-        let mut self_value: u64 = match self_iter.next() {
-            Some(x) => *x,
-            None => {
-                merged.extend(other_iter);
-                if let Some(oai) = other_abunds_iter {
-                    merged_abunds.extend(oai);
-                }
-                return Ok((merged, Some(merged_abunds)));
-            }
-        };
-
-        loop {
-            match other_iter.next() {
+        let mut self_value = self_iter.next();
+        let mut other_value = other_iter.next();
+        while self_value != None {
+            println!("{:?}", self_value);
+            match Some(other_value) {
                 None => {
-                    merged.push(self_value);
                     merged.extend(self_iter);
                     if let Some(sai) = self_abunds_iter {
                         merged_abunds.extend(sai);
                     }
                     break;
                 }
-                Some(x) if *x < self_value => {
-                    merged.push(*x);
+                Some(x) if x < self_value => {
+                    if let Some(v) = x {
+                        merged.push(*v);
+                    }
+                    other_value = other_iter.next();
+
                     if let Some(ref mut oai) = other_abunds_iter {
                         if let Some(v) = oai.next() {
                             merged_abunds.push(*v)
                         }
                     }
                 }
-                Some(x) if *x == self_value => {
-                    merged.push(*x);
+                Some(x) if x == self_value => {
+                    if let Some(v) = x {
+                        merged.push(*v);
+                    }
+                    other_value = other_iter.next();
+                    self_value = self_iter.next();
+
                     if let Some(ref mut oai) = other_abunds_iter {
                         if let Some(v) = oai.next() {
                             if let Some(ref mut sai) = self_abunds_iter {
@@ -250,21 +250,17 @@ impl KmerMinHash {
                             }
                         }
                     }
-                    self_value = match self_iter.next() {
-                        None => break,
-                        Some(x) => *x,
-                    }
                 }
-                Some(x) if *x > self_value => {
-                    merged.push(self_value);
+                Some(x) if x > self_value => {
+                    if let Some(v) = self_value {
+                        merged.push(*v);
+                    }
+                    self_value = self_iter.next();
+
                     if let Some(ref mut sai) = self_abunds_iter {
                         if let Some(v) = sai.next() {
                             merged_abunds.push(*v)
                         }
-                    }
-                    self_value = match self_iter.next() {
-                        None => break,
-                        Some(x) => *x,
                     }
                 }
                 Some(_) => {}
