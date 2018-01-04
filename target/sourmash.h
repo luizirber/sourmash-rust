@@ -38,6 +38,8 @@ typedef struct {
 
 uint64_t hash_murmur(const char *kmer, uint64_t seed);
 
+void kmerminhash_abunds_push(KmerMinHash *ptr, uint64_t val);
+
 void kmerminhash_add_hash(KmerMinHash *ptr, uint64_t h);
 
 void kmerminhash_add_sequence(KmerMinHash *ptr, const char *sequence, bool force);
@@ -63,6 +65,8 @@ uint32_t kmerminhash_ksize(KmerMinHash *ptr);
 uint64_t kmerminhash_max_hash(KmerMinHash *ptr);
 
 void kmerminhash_merge(KmerMinHash *ptr, const KmerMinHash *other);
+
+void kmerminhash_mins_push(KmerMinHash *ptr, uint64_t val);
 
 KmerMinHash *kmerminhash_new(uint32_t n,
                              uint32_t k,

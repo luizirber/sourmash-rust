@@ -34,7 +34,7 @@ pub struct KmerMinHash {
     pub seed: u64,
     pub max_hash: u64,
     pub mins: Vec<u64>,
-    pub abunds: Vec<u64>,
+    pub abunds: Option<Vec<u64>>,
 }
 
 impl KmerMinHash {
@@ -47,7 +47,7 @@ impl KmerMinHash {
         track_abundance: bool,
     ) -> KmerMinHash {
         let mins: Vec<u64>;
-        let abunds: Vec<u64>;
+        let abunds: Option<Vec<u64>>;
 
         if n > 0 {
             mins = Vec::with_capacity(n as usize);
@@ -56,9 +56,9 @@ impl KmerMinHash {
         }
 
         if track_abundance {
-            abunds = Vec::with_capacity(mins.capacity());
+            abunds = Some(Vec::with_capacity(mins.capacity()));
         } else {
-            abunds = Vec::new();
+            abunds = None
         }
 
         KmerMinHash {
@@ -95,20 +95,45 @@ impl KmerMinHash {
         };
 
         if (self.max_hash != 0 && hash <= self.max_hash) || self.max_hash == 0 {
+            // empty? add it, if within range / no range specified.
             if self.mins.len() == 0 {
                 self.mins.push(hash);
+                if let Some(ref mut abunds) = self.abunds {
+                    abunds.push(1);
+                }
                 return;
             } else if hash <= self.max_hash || current_max > hash
                 || (self.mins.len() as u32) < self.num
             {
+                // "good" hash - within range, smaller than current entry, or
+                // still have space available
                 let pos = self.mins.lower_bound(&hash);
 
                 if pos == self.mins.len() {
+                    // at end - must still be growing, we know the list won't
+                    // get too long
                     self.mins.push(hash);
+                    if let Some(ref mut abunds) = self.abunds {
+                        abunds.push(1);
+                    }
                 } else if self.mins[pos] != hash {
+                    // didn't find hash in mins, so inserting somewhere
+                    // in the middle; shrink list if needed.
                     self.mins.insert(pos, hash);
+                    if let Some(ref mut abunds) = self.abunds {
+                        abunds.insert(pos, 1);
+                    }
+
+                    // is it too big now?
                     if self.num != 0 && self.mins.len() > (self.num as usize) {
                         self.mins.pop();
+                        if let Some(ref mut abunds) = self.abunds {
+                            abunds.pop();
+                        }
+                    }
+                } else { // pos == hash: hash value already in mins, inc count
+                    if let Some(ref mut abunds) = self.abunds {
+                        abunds[pos] += 1;
                     }
                 }
             }
@@ -162,17 +187,37 @@ impl KmerMinHash {
         Ok(())
     }
 
-    pub fn merge(&mut self, other: &KmerMinHash) -> Result<Vec<u64>> {
+    pub fn merge(&mut self, other: &KmerMinHash) -> Result<(Vec<u64>, Option<Vec<u64>>)> {
         self.check_compatible(other)?;
-        let mut merged: Vec<u64> = Vec::with_capacity(self.mins.len() + other.mins.len());
+        let max_size = self.mins.len() + other.mins.len();
+        let mut merged: Vec<u64> = Vec::with_capacity(max_size);
+        let mut merged_abunds: Vec<u64> = Vec::with_capacity(max_size);
+
         let mut self_iter = self.mins.iter();
         let mut other_iter = other.mins.iter();
+
+        let mut self_abunds_iter: Option<std::slice::Iter<u64>>;
+        if let Some(ref mut abunds) = self.abunds {
+            self_abunds_iter = Some(abunds.iter());
+        } else {
+            self_abunds_iter = None;
+        }
+
+        let mut other_abunds_iter: Option<std::slice::Iter<u64>>;
+        if let Some(ref abunds) = other.abunds {
+            other_abunds_iter = Some(abunds.iter());
+        } else {
+            other_abunds_iter = None;
+        }
 
         let mut self_value: u64 = match self_iter.next() {
             Some(x) => *x,
             None => {
                 merged.extend(other_iter);
-                return Ok(merged);
+                if let Some(oai) = other_abunds_iter {
+                    merged_abunds.extend(oai);
+                }
+                return Ok((merged, Some(merged_abunds)));
             }
         };
 
@@ -181,13 +226,30 @@ impl KmerMinHash {
                 None => {
                     merged.push(self_value);
                     merged.extend(self_iter);
-                    // TODO: copy abunds too
+                    if let Some(sai) = self_abunds_iter {
+                        merged_abunds.extend(sai);
+                    }
                     break;
                 }
-                Some(x) if *x < self_value => merged.push(*x),
+                Some(x) if *x < self_value => {
+                    merged.push(*x);
+                    if let Some(ref mut oai) = other_abunds_iter {
+                        if let Some(v) = oai.next() {
+                            merged_abunds.push(*v)
+                        }
+                    }
+                }
                 Some(x) if *x == self_value => {
                     merged.push(*x);
-                    // TODO: sum abunds
+                    if let Some(ref mut oai) = other_abunds_iter {
+                        if let Some(v) = oai.next() {
+                            if let Some(ref mut sai) = self_abunds_iter {
+                                if let Some(s) = sai.next() {
+                                    merged_abunds.push(*v + *s)
+                                }
+                            }
+                        }
+                    }
                     self_value = match self_iter.next() {
                         None => break,
                         Some(x) => *x,
@@ -195,6 +257,11 @@ impl KmerMinHash {
                 }
                 Some(x) if *x > self_value => {
                     merged.push(self_value);
+                    if let Some(ref mut sai) = self_abunds_iter {
+                        if let Some(v) = sai.next() {
+                            merged_abunds.push(*v)
+                        }
+                    }
                     self_value = match self_iter.next() {
                         None => break,
                         Some(x) => *x,
@@ -204,15 +271,19 @@ impl KmerMinHash {
             }
         }
         merged.extend(other_iter);
+        if let Some(oai) = other_abunds_iter {
+            merged_abunds.extend(oai);
+        }
 
         if merged.len() < (self.num as usize) || (self.num as usize) == 0 {
-            return Ok(merged);
+            return Ok((merged, Some(merged_abunds)));
         } else {
-            return Ok(merged
+            return Ok((merged
                 .iter()
                 .map(|&x| x as u64)
                 .take(self.num as usize)
-                .collect());
+                .collect(),
+                Some(merged_abunds)));
         }
     }
 

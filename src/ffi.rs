@@ -85,13 +85,14 @@ pub extern "C" fn kmerminhash_add_word(ptr: *mut KmerMinHash, word: *const c_cha
     mh.add_word(c_str.to_bytes());
 }
 
-#[no_mangle]
-pub extern "C" fn kmerminhash_get_min_idx(ptr: *mut KmerMinHash, idx: u64) -> u64 {
-    let mh = unsafe {
+ffi_fn! {
+unsafe fn kmerminhash_get_min_idx(ptr: *mut KmerMinHash, idx: u64) -> Result<u64> {
+    let mh = {
         assert!(!ptr.is_null());
         &mut *ptr
     };
-    mh.mins[idx as usize]
+    Ok(mh.mins[idx as usize])
+}
 }
 
 #[no_mangle]
@@ -104,12 +105,26 @@ pub extern "C" fn kmerminhash_get_mins_size(ptr: *mut KmerMinHash) -> usize {
 }
 
 #[no_mangle]
-pub extern "C" fn kmerminhash_get_abund_idx(ptr: *mut KmerMinHash, idx: u64) -> u64 {
+pub extern "C" fn kmerminhash_mins_push(ptr: *mut KmerMinHash, val: u64) {
     let mh = unsafe {
         assert!(!ptr.is_null());
         &mut *ptr
     };
-    mh.abunds[idx as usize]
+    mh.mins.push(val)
+}
+
+ffi_fn! {
+unsafe fn kmerminhash_get_abund_idx(ptr: *mut KmerMinHash, idx: u64) -> Result<u64> {
+    let mh = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    if let Some(ref mut abunds) = mh.abunds {
+      Ok(abunds[idx as usize])
+    } else {
+      Ok(0)
+    }
+}
 }
 
 #[no_mangle]
@@ -118,7 +133,22 @@ pub extern "C" fn kmerminhash_get_abunds_size(ptr: *mut KmerMinHash) -> usize {
         assert!(!ptr.is_null());
         &mut *ptr
     };
-    mh.abunds.len()
+    if let Some(ref mut abunds) = mh.abunds {
+        abunds.len()
+    } else {
+        0
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn kmerminhash_abunds_push(ptr: *mut KmerMinHash, val: u64) {
+    let mh = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    if let Some(ref mut abunds) = mh.abunds {
+        abunds.push(val)
+    }
 }
 
 #[no_mangle]
@@ -177,8 +207,9 @@ unsafe fn kmerminhash_merge(ptr: *mut KmerMinHash, other: *const KmerMinHash) ->
        &*other
     };
 
-    let merged = mh.merge(other_mh)?;
+    let (merged, merged_abunds) = mh.merge(other_mh)?;
     mh.mins = merged;
+    mh.abunds = merged_abunds;
     Ok(())
 }
 }
