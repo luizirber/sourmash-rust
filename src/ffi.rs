@@ -229,3 +229,38 @@ unsafe fn kmerminhash_count_common(ptr: *mut KmerMinHash, other: *const KmerMinH
     mh.count_common(other_mh)
 }
 }
+
+ffi_fn! {
+unsafe fn kmerminhash_intersection(ptr: *mut KmerMinHash, other: *const KmerMinHash)
+    -> Result<u64> {
+    let mh = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    let other_mh = {
+       assert!(!other.is_null());
+       &*other
+    };
+
+    if let Ok((common, size)) = mh.intersection(other_mh) {
+        return Ok(size);
+    }
+    Ok(0)
+}
+}
+
+ffi_fn! {
+unsafe fn kmerminhash_compare(ptr: *mut KmerMinHash, other: *const KmerMinHash)
+    -> Result<f64> {
+    let mh = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    let other_mh = {
+       assert!(!other.is_null());
+       &*other
+    };
+
+    mh.compare(other_mh)
+}
+}

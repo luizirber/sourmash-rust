@@ -46,6 +46,8 @@ void kmerminhash_add_sequence(KmerMinHash *ptr, const char *sequence, bool force
 
 void kmerminhash_add_word(KmerMinHash *ptr, const char *word);
 
+double kmerminhash_compare(KmerMinHash *ptr, const KmerMinHash *other);
+
 uint64_t kmerminhash_count_common(KmerMinHash *ptr, const KmerMinHash *other);
 
 void kmerminhash_free(KmerMinHash *ptr);
@@ -57,6 +59,8 @@ size_t kmerminhash_get_abunds_size(KmerMinHash *ptr);
 uint64_t kmerminhash_get_min_idx(KmerMinHash *ptr, uint64_t idx);
 
 size_t kmerminhash_get_mins_size(KmerMinHash *ptr);
+
+uint64_t kmerminhash_intersection(KmerMinHash *ptr, const KmerMinHash *other);
 
 bool kmerminhash_is_protein(KmerMinHash *ptr);
 

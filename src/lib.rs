@@ -287,6 +287,38 @@ impl KmerMinHash {
         let s2: HashSet<&u64> = HashSet::from_iter(other.mins.iter());
         Ok(s1.intersection(&s2).count() as u64)
     }
+
+    pub fn intersection(&mut self, other: &KmerMinHash) -> Result<(Vec<u64>, u64)> {
+        self.check_compatible(other)?;
+
+        let mut combined_mh = KmerMinHash::new(self.num, self.ksize,
+            self.is_protein, self.seed, self.max_hash,
+            !self.abunds.is_none());
+
+        if let Ok((mins, abunds)) = self.merge(&other) {
+            combined_mh.mins = mins;
+            combined_mh.abunds = abunds
+        }
+
+        let s1: HashSet<_> = HashSet::from_iter(self.mins.iter());
+        let s2: HashSet<_> = HashSet::from_iter(other.mins.iter());
+        let s3: HashSet<_> = HashSet::from_iter(combined_mh.mins.iter());
+
+        let i1 = &s1 & &s2;
+        let i2 = &i1 & &s3;
+
+        let common: Vec<u64> = i2.into_iter().map(|n| *n).collect();
+        Ok((common, combined_mh.mins.len() as u64))
+    }
+
+    pub fn compare(&mut self, other: &KmerMinHash) -> Result<f64> {
+        self.check_compatible(other)?;
+        if let Ok((common, size)) = self.intersection(other) {
+            return Ok(common.len() as f64 / size as f64)
+        } else {
+            return Ok(0.0)
+        }
+    }
 }
 
 #[inline]
