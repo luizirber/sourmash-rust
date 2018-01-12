@@ -5,7 +5,10 @@ authors = ["Luiz Irber <luiz.irber@gmail.com>"]
 
 [lib]
 name = "sourmash"
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+lto=true
 
 [build-dependencies]
 cbindgen = "0.3.3"
