@@ -52,17 +52,17 @@ pub enum SourmashErrorCode {
     Msg = 3,
     Unknown = 4,
     // Compatibility errors
-    MismatchKSizes = 101,
-    MismatchDNAProt = 102,
-    MismatchMaxHash = 103,
-    MismatchSeed = 104,
+    MismatchKSizes = 1_01,
+    MismatchDNAProt = 1_02,
+    MismatchMaxHash = 1_03,
+    MismatchSeed = 1_04,
     // Input sequence errors
-    InvalidDNA = 1101,
-    InvalidProt = 1102,
+    InvalidDNA = 11_01,
+    InvalidProt = 11_02,
     // external errors
-    Io = 100001,
-    Utf8Error = 100002,
-    ParseInt = 100003,
+    Io = 100_001,
+    Utf8Error = 100_002,
+    ParseInt = 100_003,
 }
 
 impl SourmashErrorCode {

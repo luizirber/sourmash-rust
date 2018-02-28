@@ -39,18 +39,18 @@ pub struct KmerMinHash {
 
 impl KmerMinHash {
     pub fn new(
-        n: u32,
-        k: u32,
-        prot: bool,
+        num: u32,
+        ksize: u32,
+        is_protein: bool,
         seed: u64,
-        mx: u64,
+        max_hash: u64,
         track_abundance: bool,
     ) -> KmerMinHash {
         let mins: Vec<u64>;
         let abunds: Option<Vec<u64>>;
 
-        if n > 0 {
-            mins = Vec::with_capacity(n as usize);
+        if num > 0 {
+            mins = Vec::with_capacity(num as usize);
         } else {
             mins = Vec::with_capacity(1000);
         }
@@ -62,13 +62,13 @@ impl KmerMinHash {
         }
 
         KmerMinHash {
-            num: n,
-            ksize: k,
-            is_protein: prot,
-            seed: seed,
-            max_hash: mx,
-            mins: mins,
-            abunds: abunds,
+            num,
+            ksize,
+            is_protein,
+            seed,
+            max_hash,
+            mins,
+            abunds,
         }
     }
 
@@ -96,7 +96,7 @@ impl KmerMinHash {
 
         if (self.max_hash != 0 && hash <= self.max_hash) || self.max_hash == 0 {
             // empty? add it, if within range / no range specified.
-            if self.mins.len() == 0 {
+            if self.mins.is_empty() {
                 self.mins.push(hash);
                 if let Some(ref mut abunds) = self.abunds {
                     abunds.push(1);
@@ -153,7 +153,7 @@ impl KmerMinHash {
                     if _checkdna(kmer) {
                         let rc = revcomp(kmer);
                         if kmer < &rc {
-                            self.add_word(&kmer);
+                            self.add_word(kmer);
                         } else {
                             self.add_word(&rc);
                         }
@@ -270,14 +270,14 @@ impl KmerMinHash {
         }
 
         if merged.len() < (self.num as usize) || (self.num as usize) == 0 {
-            return Ok((merged, Some(merged_abunds)));
+            Ok((merged, Some(merged_abunds)))
         } else {
-            return Ok((merged
+            Ok((merged
                 .iter()
                 .map(|&x| x as u64)
                 .take(self.num as usize)
                 .collect(),
-                Some(merged_abunds)));
+                Some(merged_abunds)))
         }
     }
 
@@ -295,7 +295,7 @@ impl KmerMinHash {
             self.is_protein, self.seed, self.max_hash,
             !self.abunds.is_none());
 
-        if let Ok((mins, abunds)) = self.merge(&other) {
+        if let Ok((mins, abunds)) = self.merge(other) {
             combined_mh.mins = mins;
             combined_mh.abunds = abunds
         }
@@ -307,7 +307,7 @@ impl KmerMinHash {
         let i1 = &s1 & &s2;
         let i2 = &i1 & &s3;
 
-        let common: Vec<u64> = i2.into_iter().map(|n| *n).collect();
+        let common: Vec<u64> = i2.into_iter().cloned().collect();
         Ok((common, combined_mh.mins.len() as u64))
     }
 
@@ -324,6 +324,7 @@ impl KmerMinHash {
 #[inline]
 fn revcomp(seq: &[u8]) -> Vec<u8> {
     seq.iter()
+       .rev()
        .map(|n| match *n as char {
              'A' | 'a' => 'T',
              'T' | 't' => 'A',
@@ -331,7 +332,6 @@ fn revcomp(seq: &[u8]) -> Vec<u8> {
              'G' | 'g' => 'C',
              x => x
             } as u8) // TODO: error?
-       .rev()
        .collect()
 }
 
