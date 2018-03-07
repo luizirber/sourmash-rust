@@ -187,98 +187,103 @@ impl KmerMinHash {
         Ok(())
     }
 
-    pub fn merge(&mut self, other: &KmerMinHash) -> Result<(Vec<u64>, Option<Vec<u64>>)> {
+    pub fn merge(&mut self, other: &KmerMinHash) -> Result<()> {
         self.check_compatible(other)?;
         let max_size = self.mins.len() + other.mins.len();
         let mut merged: Vec<u64> = Vec::with_capacity(max_size);
         let mut merged_abunds: Vec<u64> = Vec::with_capacity(max_size);
 
-        let mut self_iter = self.mins.iter();
-        let mut other_iter = other.mins.iter();
+        {
+            let mut self_iter = self.mins.iter();
+            let mut other_iter = other.mins.iter();
 
-        let mut self_abunds_iter: Option<std::slice::Iter<u64>>;
-        if let Some(ref mut abunds) = self.abunds {
-            self_abunds_iter = Some(abunds.iter());
-        } else {
-            self_abunds_iter = None;
-        }
+            let mut self_abunds_iter: Option<std::slice::Iter<u64>>;
+            if let Some(ref mut abunds) = self.abunds {
+                self_abunds_iter = Some(abunds.iter());
+            } else {
+                self_abunds_iter = None;
+            }
 
-        let mut other_abunds_iter: Option<std::slice::Iter<u64>>;
-        if let Some(ref abunds) = other.abunds {
-            other_abunds_iter = Some(abunds.iter());
-        } else {
-            other_abunds_iter = None;
-        }
+            let mut other_abunds_iter: Option<std::slice::Iter<u64>>;
+            if let Some(ref abunds) = other.abunds {
+                other_abunds_iter = Some(abunds.iter());
+            } else {
+                other_abunds_iter = None;
+            }
 
-        let mut self_value = self_iter.next();
-        let mut other_value = other_iter.next();
-        while !self_value.is_none() {
-            let value = self_value.unwrap();
-            match other_value {
-                None => {
-                    merged.push(*value);
-                    merged.extend(self_iter);
-                    if let Some(sai) = self_abunds_iter {
-                        merged_abunds.extend(sai);
+            let mut self_value = self_iter.next();
+            let mut other_value = other_iter.next();
+            while !self_value.is_none() {
+                let value = self_value.unwrap();
+                match other_value {
+                    None => {
+                        merged.push(*value);
+                        merged.extend(self_iter);
+                        if let Some(sai) = self_abunds_iter {
+                            merged_abunds.extend(sai);
+                        }
+                        break;
                     }
-                    break;
-                }
-                Some(x) if x < value => {
-                    merged.push(*x);
-                    other_value = other_iter.next();
+                    Some(x) if x < value => {
+                        merged.push(*x);
+                        other_value = other_iter.next();
 
-                    if let Some(ref mut oai) = other_abunds_iter {
-                        if let Some(v) = oai.next() {
-                            merged_abunds.push(*v)
+                        if let Some(ref mut oai) = other_abunds_iter {
+                            if let Some(v) = oai.next() {
+                                merged_abunds.push(*v)
+                            }
                         }
                     }
-                }
-                Some(x) if x == value => {
-                    merged.push(*x);
-                    other_value = other_iter.next();
-                    self_value = self_iter.next();
+                    Some(x) if x == value => {
+                        merged.push(*x);
+                        other_value = other_iter.next();
+                        self_value = self_iter.next();
 
-                    if let Some(ref mut oai) = other_abunds_iter {
-                        if let Some(v) = oai.next() {
-                            if let Some(ref mut sai) = self_abunds_iter {
-                                if let Some(s) = sai.next() {
-                                    merged_abunds.push(*v + *s)
+                        if let Some(ref mut oai) = other_abunds_iter {
+                            if let Some(v) = oai.next() {
+                                if let Some(ref mut sai) = self_abunds_iter {
+                                    if let Some(s) = sai.next() {
+                                        merged_abunds.push(*v + *s)
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                Some(x) if x > value => {
-                    merged.push(*value);
-                    self_value = self_iter.next();
+                    Some(x) if x > value => {
+                        merged.push(*value);
+                        self_value = self_iter.next();
 
-                    if let Some(ref mut sai) = self_abunds_iter {
-                        if let Some(v) = sai.next() {
-                            merged_abunds.push(*v)
+                        if let Some(ref mut sai) = self_abunds_iter {
+                            if let Some(v) = sai.next() {
+                                merged_abunds.push(*v)
+                            }
                         }
                     }
+                    Some(_) => {}
                 }
-                Some(_) => {}
             }
-        }
-        if let Some(value) = other_value {
-            merged.push(*value);
-        }
-        merged.extend(other_iter);
-        if let Some(oai) = other_abunds_iter {
-            merged_abunds.extend(oai);
+            if let Some(value) = other_value {
+                merged.push(*value);
+            }
+            merged.extend(other_iter);
+            if let Some(oai) = other_abunds_iter {
+                merged_abunds.extend(oai);
+            }
+
         }
 
+
         if merged.len() < (self.num as usize) || (self.num as usize) == 0 {
-            Ok((merged, Some(merged_abunds)))
+            self.mins = merged;
+            self.abunds = Some(merged_abunds);
         } else {
-            Ok((merged
-                .iter()
-                .map(|&x| x as u64)
-                .take(self.num as usize)
-                .collect(),
-                Some(merged_abunds)))
+            self.mins = merged.iter()
+                           .map(|&x| x as u64)
+                           .take(self.num as usize)
+                           .collect();
+            self.abunds = Some(merged_abunds)  // TODO: reduce this one too
         }
+        Ok(())
     }
 
     pub fn count_common(&mut self, other: &KmerMinHash) -> Result<u64> {
@@ -295,10 +300,8 @@ impl KmerMinHash {
             self.is_protein, self.seed, self.max_hash,
             !self.abunds.is_none());
 
-        if let Ok((mins, abunds)) = self.merge(other) {
-            combined_mh.mins = mins;
-            combined_mh.abunds = abunds
-        }
+        combined_mh.merge(&self);
+        combined_mh.merge(&other);
 
         let s1: HashSet<_> = HashSet::from_iter(self.mins.iter());
         let s2: HashSet<_> = HashSet::from_iter(other.mins.iter());

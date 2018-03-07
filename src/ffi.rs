@@ -207,9 +207,7 @@ unsafe fn kmerminhash_merge(ptr: *mut KmerMinHash, other: *const KmerMinHash) ->
        &*other
     };
 
-    let (merged, merged_abunds) = mh.merge(other_mh)?;
-    mh.mins = merged;
-    mh.abunds = merged_abunds;
+    mh.merge(other_mh)?;
     Ok(())
 }
 }
