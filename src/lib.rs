@@ -317,7 +317,7 @@ impl KmerMinHash {
     pub fn compare(&mut self, other: &KmerMinHash) -> Result<f64> {
         self.check_compatible(other)?;
         if let Ok((common, size)) = self.intersection(other) {
-            return Ok(common.len() as f64 / size as f64)
+            return Ok(common.len() as f64 / u64::max(1, size) as f64)
         } else {
             return Ok(0.0)
         }
