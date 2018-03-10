@@ -6,6 +6,9 @@ extern crate ordslice;
 extern crate error_chain;
 
 #[macro_use]
+extern crate lazy_static;
+
+#[macro_use]
 pub mod errors;
 
 #[macro_use]
@@ -14,8 +17,10 @@ pub mod utils;
 #[macro_use]
 pub mod ffi;
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::FromIterator;
+use std::str;
 
 use murmurhash3::murmurhash3_x64_128;
 use ordslice::Ext;
@@ -24,6 +29,62 @@ use errors::{ErrorKind, Result};
 
 pub fn _hash_murmur(kmer: &[u8], seed: u64) -> u64 {
     murmurhash3_x64_128(kmer, seed).0
+}
+
+lazy_static! {
+    static ref CODONTABLE: HashMap<&'static str, u8> = {
+        let mut m = HashMap::new();
+        m.insert("TTT", 'F' as u8);
+        m.insert("TTC", 'F' as u8);
+        m.insert("TTA", 'L' as u8);
+        m.insert("TTG", 'L' as u8);
+
+/* Done:
+        {"TTT", "F"}, {"TTC", "F"},
+        {"TTA", "L"}, {"TTG", "L"},
+*/
+
+/* TODO:
+        {"TCT", "S"}, {"TCC", "S"}, {"TCA", "S"}, {"TCG", "S"},
+
+        {"TAT", "Y"}, {"TAC", "Y"},
+        {"TAA", "*"}, {"TAG", "*"},
+
+        {"TGT", "C"}, {"TGC", "C"},
+        {"TGA", "*"},
+        {"TGG", "W"},
+
+        {"CTT", "L"}, {"CTC", "L"}, {"CTA", "L"}, {"CTG", "L"},
+
+        {"CCT", "P"}, {"CCC", "P"}, {"CCA", "P"}, {"CCG", "P"},
+
+        {"CAT", "H"}, {"CAC", "H"},
+        {"CAA", "Q"}, {"CAG", "Q"},
+
+        {"CGT", "R"}, {"CGC", "R"}, {"CGA", "R"}, {"CGG", "R"},
+
+        {"ATT", "I"}, {"ATC", "I"}, {"ATA", "I"},
+        {"ATG", "M"},
+
+        {"ACT", "T"}, {"ACC", "T"}, {"ACA", "T"}, {"ACG", "T"},
+
+        {"AAT", "N"}, {"AAC", "N"},
+        {"AAA", "K"}, {"AAG", "K"},
+
+        {"AGT", "S"}, {"AGC", "S"},
+        {"AGA", "R"}, {"AGG", "R"},
+
+        {"GTT", "V"}, {"GTC", "V"}, {"GTA", "V"}, {"GTG", "V"},
+
+        {"GCT", "A"}, {"GCC", "A"}, {"GCA", "A"}, {"GCG", "A"},
+
+        {"GAT", "D"}, {"GAC", "D"},
+        {"GAA", "E"}, {"GAG", "E"},
+
+        {"GGT", "G"}, {"GGC", "G"}, {"GGA", "G"}, {"GGG", "G"}
+  */
+        m
+    };
 }
 
 #[derive(Debug)]
@@ -340,14 +401,11 @@ fn revcomp(seq: &[u8]) -> Vec<u8> {
 
 #[inline]
 fn to_aa(seq: &[u8]) -> Vec<u8> {
-    seq.iter()
-       .map(|n| match *n as char {
-             'A' | 'a' => 'T',
-             'T' | 't' => 'A',
-             'C' | 'c' => 'G',
-             'G' | 'g' => 'C',
-             x => x
-            } as u8) // TODO: error?
+    seq.chunks(3)
+       .map(|n| { //TODO: better error handling
+           CODONTABLE.get(str::from_utf8(n).unwrap()).unwrap()
+       })
+       .cloned()
        .collect()
 }
 
