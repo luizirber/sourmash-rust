@@ -31,62 +31,6 @@ pub fn _hash_murmur(kmer: &[u8], seed: u64) -> u64 {
     murmurhash3_x64_128(kmer, seed).0
 }
 
-lazy_static! {
-    static ref CODONTABLE: HashMap<&'static str, u8> = {
-        let mut m = HashMap::new();
-        m.insert("TTT", 'F' as u8);
-        m.insert("TTC", 'F' as u8);
-        m.insert("TTA", 'L' as u8);
-        m.insert("TTG", 'L' as u8);
-
-/* Done:
-        {"TTT", "F"}, {"TTC", "F"},
-        {"TTA", "L"}, {"TTG", "L"},
-*/
-
-/* TODO:
-        {"TCT", "S"}, {"TCC", "S"}, {"TCA", "S"}, {"TCG", "S"},
-
-        {"TAT", "Y"}, {"TAC", "Y"},
-        {"TAA", "*"}, {"TAG", "*"},
-
-        {"TGT", "C"}, {"TGC", "C"},
-        {"TGA", "*"},
-        {"TGG", "W"},
-
-        {"CTT", "L"}, {"CTC", "L"}, {"CTA", "L"}, {"CTG", "L"},
-
-        {"CCT", "P"}, {"CCC", "P"}, {"CCA", "P"}, {"CCG", "P"},
-
-        {"CAT", "H"}, {"CAC", "H"},
-        {"CAA", "Q"}, {"CAG", "Q"},
-
-        {"CGT", "R"}, {"CGC", "R"}, {"CGA", "R"}, {"CGG", "R"},
-
-        {"ATT", "I"}, {"ATC", "I"}, {"ATA", "I"},
-        {"ATG", "M"},
-
-        {"ACT", "T"}, {"ACC", "T"}, {"ACA", "T"}, {"ACG", "T"},
-
-        {"AAT", "N"}, {"AAC", "N"},
-        {"AAA", "K"}, {"AAG", "K"},
-
-        {"AGT", "S"}, {"AGC", "S"},
-        {"AGA", "R"}, {"AGG", "R"},
-
-        {"GTT", "V"}, {"GTC", "V"}, {"GTA", "V"}, {"GTG", "V"},
-
-        {"GCT", "A"}, {"GCC", "A"}, {"GCA", "A"}, {"GCG", "A"},
-
-        {"GAT", "D"}, {"GAC", "D"},
-        {"GAA", "E"}, {"GAG", "E"},
-
-        {"GGT", "G"}, {"GGC", "G"}, {"GGA", "G"}, {"GGG", "G"}
-  */
-        m
-    };
-}
-
 #[derive(Debug)]
 pub struct KmerMinHash {
     pub num: u32,
@@ -228,9 +172,43 @@ impl KmerMinHash {
                 }
             } else {
                 // protein
+                let rc = revcomp(sequence);
+                let aa_ksize = self.ksize / 3;
+
+                for i in 0..3 {
+                    let substr: Vec<u8> = sequence.iter()
+                                         .cloned()
+                                         .skip(i)
+                                         .take(sequence.len() - i)
+                                         .collect();
+                    let aa = to_aa(&substr);
+
+                    aa.windows(aa_ksize as usize)
+                      .map(|n| self.add_word(n))
+                      .count();
+                }
+
+                for i in 0..3 {
+                    let substr: Vec<u8> = rc.iter()
+                                         .cloned()
+                                         .skip(i)
+                                         .take(sequence.len() - i)
+                                         .collect();
+                    let aa = to_aa(&substr);
+
+                    aa.windows(aa_ksize as usize)
+                      .map(|n| self.add_word(n))
+                      .count();
+                }
+
+
+
+
+
+
                 for (kmer, rc) in sequence
                     .windows((self.ksize * 3) as usize)
-                    .zip(revcomp(sequence).windows((self.ksize * 3) as usize))
+                    .zip(rc.windows((self.ksize * 3) as usize))
                 {
                     let aa_kmer = to_aa(kmer);
                     let aa_rc = to_aa(rc);
@@ -399,8 +377,97 @@ fn revcomp(seq: &[u8]) -> Vec<u8> {
        .collect()
 }
 
+lazy_static! {
+    static ref CODONTABLE: HashMap<&'static str, u8> = {
+        let mut m = HashMap::new();
+
+        m.insert("TTT", 'F' as u8);
+        m.insert("TTC", 'F' as u8);
+        m.insert("TTA", 'L' as u8);
+        m.insert("TTG", 'L' as u8);
+
+        m.insert("TCT", 'S' as u8);
+        m.insert("TCC", 'S' as u8);
+        m.insert("TCA", 'S' as u8);
+        m.insert("TCG", 'S' as u8);
+
+        m.insert("TAT", 'Y' as u8);
+        m.insert("TAC", 'Y' as u8);
+        m.insert("TAA", '*' as u8);
+        m.insert("TAG", '*' as u8);
+
+        m.insert("TGT", 'C' as u8);
+        m.insert("TGC", 'C' as u8);
+        m.insert("TGA", '*' as u8);
+        m.insert("TGG", 'W' as u8);
+
+        m.insert("CTT", 'L' as u8);
+        m.insert("CTC", 'L' as u8);
+        m.insert("CTA", 'L' as u8);
+        m.insert("CTG", 'L' as u8);
+
+        m.insert("CCT", 'P' as u8);
+        m.insert("CCC", 'P' as u8);
+        m.insert("CCA", 'P' as u8);
+        m.insert("CCG", 'P' as u8);
+
+        m.insert("CAT", 'H' as u8);
+        m.insert("CAC", 'H' as u8);
+        m.insert("CAA", 'Q' as u8);
+        m.insert("CAG", 'Q' as u8);
+
+        m.insert("CGT", 'R' as u8);
+        m.insert("CGC", 'R' as u8);
+        m.insert("CGA", 'R' as u8);
+        m.insert("CGG", 'R' as u8);
+
+        m.insert("ATT", 'I' as u8);
+        m.insert("ATC", 'I' as u8);
+        m.insert("ATA", 'I' as u8);
+        m.insert("ATG", 'M' as u8);
+
+        m.insert("ACT", 'T' as u8);
+        m.insert("ACC", 'T' as u8);
+        m.insert("ACA", 'T' as u8);
+        m.insert("ACG", 'T' as u8);
+
+        m.insert("AAT", 'N' as u8);
+        m.insert("AAC", 'N' as u8);
+        m.insert("AAA", 'K' as u8);
+        m.insert("AAG", 'K' as u8);
+
+        m.insert("AGT", 'S' as u8);
+        m.insert("AGC", 'S' as u8);
+        m.insert("AGA", 'R' as u8);
+        m.insert("AGG", 'R' as u8);
+
+        m.insert("GTT", 'V' as u8);
+        m.insert("GTC", 'V' as u8);
+        m.insert("GTA", 'V' as u8);
+        m.insert("GTG", 'V' as u8);
+
+        m.insert("GCT", 'A' as u8);
+        m.insert("GCC", 'A' as u8);
+        m.insert("GCA", 'A' as u8);
+        m.insert("GCG", 'A' as u8);
+
+        m.insert("GAT", 'D' as u8);
+        m.insert("GAC", 'D' as u8);
+        m.insert("GAA", 'E' as u8);
+        m.insert("GAG", 'E' as u8);
+
+        m.insert("GGT", 'D' as u8);
+        m.insert("GGC", 'D' as u8);
+        m.insert("GGA", 'E' as u8);
+        m.insert("GGG", 'E' as u8);
+
+        m
+    };
+}
+
 #[inline]
 fn to_aa(seq: &[u8]) -> Vec<u8> {
+    let dna_size = seq.len() / 3;
     seq.chunks(3)
        .map(|n| { //TODO: better error handling
            CODONTABLE.get(str::from_utf8(n).unwrap()).unwrap()
