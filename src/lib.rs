@@ -186,40 +186,17 @@ impl KmerMinHash {
                     aa.windows(aa_ksize as usize)
                       .map(|n| self.add_word(n))
                       .count();
-                }
 
-                for i in 0..3 {
-                    let substr: Vec<u8> = rc.iter()
-                                         .cloned()
-                                         .skip(i)
-                                         .take(sequence.len() - i)
-                                         .collect();
-                    let aa = to_aa(&substr);
+                    let rc_substr: Vec<u8> = rc.iter()
+                                               .cloned()
+                                               .skip(i)
+                                               .take(rc.len() - i)
+                                               .collect();
+                    let aa_rc = to_aa(&rc_substr);
 
-                    aa.windows(aa_ksize as usize)
+                    aa_rc.windows(aa_ksize as usize)
                       .map(|n| self.add_word(n))
                       .count();
-                }
-
-
-
-
-
-
-                for (kmer, rc) in sequence
-                    .windows((self.ksize * 3) as usize)
-                    .zip(rc.windows((self.ksize * 3) as usize))
-                {
-                    let aa_kmer = to_aa(kmer);
-                    let aa_rc = to_aa(rc);
-
-                    //println!("{:?} {:?}, {:?} {:?}", kmer, aa_kmer, rc, aa_rc);
-
-                    if aa_kmer < aa_rc {
-                        self.add_word(&aa_kmer);
-                    } else {
-                        self.add_word(&aa_rc);
-                    }
                 }
             }
         }
@@ -456,10 +433,10 @@ lazy_static! {
         m.insert("GAA", 'E' as u8);
         m.insert("GAG", 'E' as u8);
 
-        m.insert("GGT", 'D' as u8);
-        m.insert("GGC", 'D' as u8);
-        m.insert("GGA", 'E' as u8);
-        m.insert("GGG", 'E' as u8);
+        m.insert("GGT", 'G' as u8);
+        m.insert("GGC", 'G' as u8);
+        m.insert("GGA", 'G' as u8);
+        m.insert("GGG", 'G' as u8);
 
         m
     };
