@@ -467,13 +467,18 @@ lazy_static! {
 
 #[inline]
 fn to_aa(seq: &[u8]) -> Vec<u8> {
-    let dna_size = seq.len() / 3;
-    seq.chunks(3)
-       .map(|n| { //TODO: better error handling
-           CODONTABLE.get(str::from_utf8(n).unwrap()).unwrap()
-       })
-       .cloned()
-       .collect()
+    let mut converted: Vec<u8> = Vec::with_capacity(seq.len() / 3);
+
+    for chunk in seq.chunks(3) {
+        if chunk.len() != 3 {
+            break
+        }
+        if let Some(codon) = CODONTABLE.get(str::from_utf8(chunk).unwrap()) {
+            converted.push(*codon);
+        }
+    }
+
+    converted
 }
 
 #[inline]
