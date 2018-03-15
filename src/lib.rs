@@ -302,6 +302,13 @@ impl KmerMinHash {
         Ok(())
     }
 
+    pub fn add_from(&mut self, other: &KmerMinHash) -> Result<()> {
+        for min in &other.mins {
+            self.add_hash(*min);
+        }
+        Ok(())
+    }
+
     pub fn count_common(&mut self, other: &KmerMinHash) -> Result<u64> {
         self.check_compatible(other)?;
         let s1: HashSet<&u64> = HashSet::from_iter(self.mins.iter());

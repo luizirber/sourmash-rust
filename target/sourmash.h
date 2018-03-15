@@ -32,13 +32,15 @@ typedef struct KmerMinHash KmerMinHash;
  */
 typedef struct {
   char *data;
-  size_t len;
+  uintptr_t len;
   bool owned;
 } SourmashStr;
 
 uint64_t hash_murmur(const char *kmer, uint64_t seed);
 
 void kmerminhash_abunds_push(KmerMinHash *ptr, uint64_t val);
+
+void kmerminhash_add_from(KmerMinHash *ptr, const KmerMinHash *other);
 
 void kmerminhash_add_hash(KmerMinHash *ptr, uint64_t h);
 
@@ -54,11 +56,11 @@ void kmerminhash_free(KmerMinHash *ptr);
 
 uint64_t kmerminhash_get_abund_idx(KmerMinHash *ptr, uint64_t idx);
 
-size_t kmerminhash_get_abunds_size(KmerMinHash *ptr);
+uintptr_t kmerminhash_get_abunds_size(KmerMinHash *ptr);
 
 uint64_t kmerminhash_get_min_idx(KmerMinHash *ptr, uint64_t idx);
 
-size_t kmerminhash_get_mins_size(KmerMinHash *ptr);
+uintptr_t kmerminhash_get_mins_size(KmerMinHash *ptr);
 
 uint64_t kmerminhash_intersection(KmerMinHash *ptr, const KmerMinHash *other);
 
@@ -86,19 +88,19 @@ uint64_t kmerminhash_seed(KmerMinHash *ptr);
 /*
  * Clears the last error.
  */
-void sourmash_err_clear();
+void sourmash_err_clear(void);
 
 /*
  * Returns the panic information as string.
  */
-SourmashStr sourmash_err_get_backtrace();
+SourmashStr sourmash_err_get_backtrace(void);
 
 /*
  * Returns the last error code.
  *
  * If there is no error, 0 is returned.
  */
-SourmashErrorCode sourmash_err_get_last_code();
+SourmashErrorCode sourmash_err_get_last_code(void);
 
 /*
  * Returns the last error message.
@@ -106,12 +108,12 @@ SourmashErrorCode sourmash_err_get_last_code();
  * If there is no error an empty string is returned.  This allocates new memory
  * that needs to be freed with `sourmash_str_free`.
  */
-SourmashStr sourmash_err_get_last_message();
+SourmashStr sourmash_err_get_last_message(void);
 
 /*
  * Initializes the library
  */
-void sourmash_init();
+void sourmash_init(void);
 
 /*
  * Frees a sourmash str.
