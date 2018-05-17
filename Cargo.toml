@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 lto=true
 
 [build-dependencies]
-cbindgen = "0.3.3"
+cbindgen = "0.5.2"
 
 [dependencies]
 backtrace = "0.3.4"
