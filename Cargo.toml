@@ -23,6 +23,7 @@ cbindgen = "0.6.1"
 
 [dependencies]
 backtrace = "0.3.4"
+cfg-if = "0.1"
 error-chain = "0.12"
 finch = { version = "0.1.6", optional = true }
 lazy_static = "1.0.0"
@@ -33,3 +34,7 @@ ordslice = "0.3.0"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0.2"
+
+#TODO: wasm-pack can't check optionals or this kind of config yet...
+# [target. 'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
