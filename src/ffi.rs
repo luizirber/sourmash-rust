@@ -86,6 +86,19 @@ pub extern "C" fn kmerminhash_add_word(ptr: *mut KmerMinHash, word: *const c_cha
 }
 
 ffi_fn! {
+unsafe fn kmerminhash_get_mins(ptr: *mut KmerMinHash) -> Result<*const u64> {
+    let mh = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    let output = mh.mins.clone();
+    let ptr = output.as_ptr();
+    mem::forget(output);
+    Ok(ptr)
+}
+}
+
+ffi_fn! {
 unsafe fn kmerminhash_get_min_idx(ptr: *mut KmerMinHash, idx: u64) -> Result<u64> {
     let mh = {
         assert!(!ptr.is_null());

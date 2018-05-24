@@ -60,6 +60,8 @@ uintptr_t kmerminhash_get_abunds_size(KmerMinHash *ptr);
 
 uint64_t kmerminhash_get_min_idx(KmerMinHash *ptr, uint64_t idx);
 
+const uint64_t *kmerminhash_get_mins(KmerMinHash *ptr);
+
 uintptr_t kmerminhash_get_mins_size(KmerMinHash *ptr);
 
 uint64_t kmerminhash_intersection(KmerMinHash *ptr, const KmerMinHash *other);
