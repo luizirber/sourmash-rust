@@ -4,7 +4,8 @@ use sourmash::KmerMinHash;
 
 #[test]
 fn throws_error() {
-    let mut mh = KmerMinHash::new(1, 4, false, 42, 0xffff_ffff_ffff_ffff, false);
+    let mut mh = KmerMinHash { num: 1, ksize: 4, .. Default::default() };
+
     match mh.add_sequence(b"ATGR", false) {
         Ok(_) => assert!(false, "R is not a valid DNA character"),
         Err(_) => assert!(true),
@@ -13,8 +14,8 @@ fn throws_error() {
 
 #[test]
 fn merge() {
-    let mut a = KmerMinHash::new(20, 10, false, 42, 0xffff_ffff_ffff_ffff, false);
-    let mut b = KmerMinHash::new(20, 10, false, 42, 0xffff_ffff_ffff_ffff, false);
+    let mut a = KmerMinHash { num: 20, ksize: 10, .. Default::default() };
+    let mut b = KmerMinHash { num: 20, ksize: 10, .. Default::default() };
 
     a.add_sequence(b"TGCCGCCCAGCA", false);
     b.add_sequence(b"TGCCGCCCAGCA", false);
@@ -28,8 +29,8 @@ fn merge() {
 
 #[test]
 fn compare() {
-    let mut a = KmerMinHash::new(20, 10, false, 42, 0xffff_ffff_ffff_ffff, false);
-    let mut b = KmerMinHash::new(20, 10, false, 42, 0xffff_ffff_ffff_ffff, false);
+    let mut a = KmerMinHash { num: 20, ksize: 10, .. Default::default() };
+    let mut b = KmerMinHash { num: 20, ksize: 10, .. Default::default() };
 
     a.add_sequence(b"TGCCGCCCAGCACCGGGTGACTAGGTTGAGCCATGATTAACCTGCAATGA", false);
     b.add_sequence(b"TGCCGCCCAGCACCGGGTGACTAGGTTGAGCCATGATTAACCTGCAATGA", false);

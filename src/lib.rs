@@ -42,6 +42,20 @@ pub struct KmerMinHash {
     pub abunds: Option<Vec<u64>>,
 }
 
+impl Default for KmerMinHash {
+    fn default() -> KmerMinHash {
+        KmerMinHash {
+            num: 1000,
+            ksize: 21,
+            is_protein: false,
+            seed: 42,
+            max_hash: 0xffff_ffff_ffff_ffff,
+            mins: Vec::with_capacity(1000),
+            abunds: None,
+        }
+    }
+}
+
 impl KmerMinHash {
     pub fn new(
         num: u32,
