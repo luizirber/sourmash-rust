@@ -56,6 +56,8 @@ void kmerminhash_free(KmerMinHash *ptr);
 
 uint64_t kmerminhash_get_abund_idx(KmerMinHash *ptr, uint64_t idx);
 
+const uint64_t *kmerminhash_get_abunds(KmerMinHash *ptr);
+
 uintptr_t kmerminhash_get_abunds_size(KmerMinHash *ptr);
 
 uint64_t kmerminhash_get_min_idx(KmerMinHash *ptr, uint64_t idx);

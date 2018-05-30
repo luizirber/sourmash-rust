@@ -1,5 +1,6 @@
 use std::ffi::CStr;
 use std::mem;
+use std::ptr;
 use std::os::raw::c_char;
 use {_hash_murmur, KmerMinHash};
 
@@ -95,6 +96,23 @@ unsafe fn kmerminhash_get_mins(ptr: *mut KmerMinHash) -> Result<*const u64> {
     let ptr = output.as_ptr();
     mem::forget(output);
     Ok(ptr)
+}
+}
+
+ffi_fn! {
+unsafe fn kmerminhash_get_abunds(ptr: *mut KmerMinHash) -> Result<*const u64> {
+    let mh = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    if let Some(ref abunds) = mh.abunds {
+        let output = abunds.clone();
+        let ptr = output.as_ptr();
+        mem::forget(output);
+        Ok(ptr)
+    } else {
+        Ok(ptr::null())
+    }
 }
 }
 
