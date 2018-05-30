@@ -49,7 +49,7 @@ impl Default for KmerMinHash {
             ksize: 21,
             is_protein: false,
             seed: 42,
-            max_hash: 0xffff_ffff_ffff_ffff,
+            max_hash: 0,
             mins: Vec::with_capacity(1000),
             abunds: None,
         }
