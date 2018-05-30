@@ -14,12 +14,16 @@ crate-type = ["cdylib", "rlib"]
 [profile.release]
 lto=true
 
+[features]
+from-finch = ["finch"]
+
 [build-dependencies]
 cbindgen = "0.6.0"
 
 [dependencies]
 backtrace = "0.3.4"
 error-chain = "0.11"
+finch = { version = "0.1.5", optional = true }
 lazy_static = "1.0.0"
 murmurhash3 = "~0.0.5"
 ordslice = "0.2.0"
