@@ -194,7 +194,8 @@ impl KmerMinHash {
         self.add_hash(hash);
     }
 
-    pub fn add_sequence(&mut self, sequence: &[u8], force: bool) -> Result<()> {
+    pub fn add_sequence(&mut self, seq: &[u8], force: bool) -> Result<()> {
+        let sequence: Vec<u8> = seq.iter().map(|&x| (x as char).to_ascii_uppercase() as u8).collect();
         if sequence.len() >= (self.ksize as usize) {
             if !self.is_protein {
                 // dna
@@ -216,7 +217,7 @@ impl KmerMinHash {
                 }
             } else {
                 // protein
-                let rc = revcomp(sequence);
+                let rc = revcomp(&sequence);
                 let aa_ksize = self.ksize / 3;
 
                 for i in 0..3 {
