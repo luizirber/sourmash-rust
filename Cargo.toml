@@ -23,7 +23,7 @@ cbindgen = "0.6.0"
 [dependencies]
 backtrace = "0.3.4"
 error-chain = "0.11"
-finch = { version = "0.1.5", optional = true }
+finch = { version = "0.1.6", optional = true }
 lazy_static = "1.0.0"
 murmurhash3 = "~0.0.5"
 needletail = { version = "~0.1.4", optional = true }
