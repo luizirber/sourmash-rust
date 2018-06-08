@@ -19,6 +19,7 @@ pub mod ffi;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::hash::{Hasher, BuildHasherDefault};
 use std::iter::FromIterator;
 use std::str;
 
@@ -29,6 +30,29 @@ use errors::{ErrorKind, Result};
 
 pub fn _hash_murmur(kmer: &[u8], seed: u64) -> u64 {
     murmurhash3_x64_128(kmer, seed).0
+}
+
+// This comes from finch
+pub struct NoHashHasher(u64);
+
+impl Default for NoHashHasher {
+    #[inline]
+    fn default() -> NoHashHasher {
+        NoHashHasher(0x0000000000000000)
+    }
+}
+
+impl Hasher for NoHashHasher {
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        *self = NoHashHasher(
+            ((bytes[0] as u64) << 24) +
+            ((bytes[1] as u64) << 16) +
+            ((bytes[2] as u64) << 8) +
+            (bytes[3] as u64)
+        );
+    }
+    fn finish(&self) -> u64 { self.0 }
 }
 
 #[derive(Debug)]
@@ -325,8 +349,8 @@ impl KmerMinHash {
 
     pub fn count_common(&mut self, other: &KmerMinHash) -> Result<u64> {
         self.check_compatible(other)?;
-        let s1: HashSet<&u64> = HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<&u64> = HashSet::from_iter(other.mins.iter());
+        let s1: HashSet<&u64, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
+        let s2: HashSet<&u64, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(other.mins.iter());
         Ok(s1.intersection(&s2).count() as u64)
     }
 
@@ -340,9 +364,9 @@ impl KmerMinHash {
         combined_mh.merge(&self);
         combined_mh.merge(&other);
 
-        let s1: HashSet<_> = HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<_> = HashSet::from_iter(other.mins.iter());
-        let s3: HashSet<_> = HashSet::from_iter(combined_mh.mins.iter());
+        let s1: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
+        let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(other.mins.iter());
+        let s3: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(combined_mh.mins.iter());
 
         let i1 = &s1 & &s2;
         let i2 = &i1 & &s3;
@@ -361,9 +385,9 @@ impl KmerMinHash {
         combined_mh.merge(&self);
         combined_mh.merge(&other);
 
-        let s1: HashSet<_> = HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<_> = HashSet::from_iter(other.mins.iter());
-        let s3: HashSet<_> = HashSet::from_iter(combined_mh.mins.iter());
+        let s1: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
+        let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(other.mins.iter());
+        let s3: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(combined_mh.mins.iter());
 
         let i1 = &s1 & &s2;
         let i2 = &i1 & &s3;
