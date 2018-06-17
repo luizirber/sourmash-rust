@@ -2,6 +2,9 @@ extern crate backtrace;
 extern crate murmurhash3;
 extern crate ordslice;
 
+#[cfg(feature = "from-finch")]
+extern crate finch;
+
 #[macro_use]
 extern crate error_chain;
 
@@ -16,6 +19,9 @@ pub mod utils;
 
 #[macro_use]
 pub mod ffi;
+
+#[cfg(feature = "from-finch")]
+pub mod from;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -345,6 +351,22 @@ impl KmerMinHash {
             self.add_hash(*min);
         }
         Ok(())
+    }
+
+    pub fn add_many(&mut self, hashes: Vec<u64>) -> Result<()> {
+        for min in hashes.iter() {
+            self.add_hash(*min);
+        }
+        Ok(())
+    }
+
+    pub fn add_many_with_abund(&mut self, hashes: Vec<(u64, u64)>) -> Result<()> {
+        for item in hashes.iter() {
+            for _i in 0..item.1 {
+                self.add_hash(item.0);
+            }
+        }
+       Ok(())
     }
 
     pub fn count_common(&mut self, other: &KmerMinHash) -> Result<u64> {
