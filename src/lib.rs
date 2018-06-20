@@ -508,20 +508,31 @@ impl KmerMinHash {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct MultiSignature {
+pub struct Signature {
+   #[serde(default = "default_class")]
    pub class: String,
 
    #[serde(default)]
    pub email: String,
    pub hash_function: String,
-   pub filename: String,
-   pub name: String,
 
-   #[serde(default)]
+   pub filename: Option<String>,
+   pub name: Option<String>,
+
+   #[serde(default = "default_license")]
    pub license: String,
 
    pub signatures: Vec<KmerMinHash>,
    pub version: f64
+}
+
+
+fn default_license() -> String {
+    "CC0".to_string()
+}
+
+fn default_class() -> String {
+    "sourmash_signature".to_string()
 }
 
 #[inline]
