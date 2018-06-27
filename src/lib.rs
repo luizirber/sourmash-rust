@@ -209,8 +209,7 @@ impl KmerMinHash {
                         }
                     } else {
                         if !force {
-                            let last = vec![kmer.last().cloned().unwrap()];
-                            return Err(ErrorKind::InvalidDNA(String::from_utf8(last).unwrap())
+                            return Err(ErrorKind::InvalidDNA(String::from_utf8(kmer.to_vec()).unwrap())
                                 .into());
                         }
                     }

@@ -27,7 +27,7 @@ error_chain! {
         }
         InvalidDNA(message: String) {
             description("Invalid DNA character in input")
-            display("invalid DNA character in input: {}", message)
+            display("invalid DNA character in input k-mer: {}", message)
         }
         InvalidProt(message: String) {
             description("Invalid protein character in input")
