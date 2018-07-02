@@ -21,8 +21,12 @@ fn load_signature() {
     let sig = sigs.get(0).unwrap();
     assert_eq!(sig.class, "sourmash_signature");
     assert_eq!(sig.email, "");
-    assert_eq!(sig.filename, "-");
+    if let Some(ref filename) = sig.filename {
+        assert_eq!(filename, "-");
+    }
     assert_eq!(sig.hash_function, "0.murmur64");
-    assert_eq!(sig.name, "s10+s11");
+    if let Some(ref name) = sig.name {
+        assert_eq!(name, "s10+s11");
+    }
     assert_eq!(sig.signatures.len(), 4);
 }
