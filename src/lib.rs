@@ -507,7 +507,7 @@ impl KmerMinHash {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Signature {
    #[serde(default = "default_class")]
    pub class: String,

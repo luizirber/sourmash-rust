@@ -2,7 +2,7 @@ use std::ffi::CStr;
 use std::mem;
 use std::ptr;
 use std::os::raw::c_char;
-use {_hash_murmur, KmerMinHash};
+use {_hash_murmur, KmerMinHash, Signature};
 
 #[no_mangle]
 pub extern "C" fn hash_murmur(kmer: *const c_char, seed: u64) -> u64 {
@@ -308,4 +308,21 @@ unsafe fn kmerminhash_compare(ptr: *mut KmerMinHash, other: *const KmerMinHash)
 
     mh.compare(other_mh)
 }
+}
+
+// Signature methods
+
+#[no_mangle]
+pub unsafe extern "C" fn signature_new() -> *mut KmerMinHash {
+    mem::transmute(Box::new(Signature::default()))
+}
+
+#[no_mangle]
+pub extern "C" fn signature_free(ptr: *mut Signature) {
+    if ptr.is_null() {
+        return;
+    }
+    unsafe {
+        Box::from_raw(ptr);
+    }
 }

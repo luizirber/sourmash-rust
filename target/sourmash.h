@@ -27,6 +27,8 @@ typedef uint32_t SourmashErrorCode;
 
 typedef struct KmerMinHash KmerMinHash;
 
+typedef struct Signature Signature;
+
 /*
  * Represents a string.
  */
@@ -88,6 +90,10 @@ KmerMinHash *kmerminhash_new(uint32_t n,
 uint32_t kmerminhash_num(KmerMinHash *ptr);
 
 uint64_t kmerminhash_seed(KmerMinHash *ptr);
+
+void signature_free(Signature *ptr);
+
+KmerMinHash *signature_new(void);
 
 /*
  * Clears the last error.
