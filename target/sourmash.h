@@ -93,7 +93,21 @@ uint64_t kmerminhash_seed(KmerMinHash *ptr);
 
 void signature_free(Signature *ptr);
 
-KmerMinHash *signature_new(void);
+Signature *signature_new(void);
+
+void signature_set_name(Signature *ptr, const char *name);
+
+void signature_set_filename(Signature *ptr, const char *name);
+
+void signature_push_mh(Signature *ptr, const KmerMinHash *other);
+
+KmerMinHash *signature_first_mh(Signature *ptr);
+
+const Signature *signatures_load_buffer(const char *buffer);
+
+SourmashStr signature_get_name(Signature *ptr);
+
+SourmashStr signatures_save_buffer(Signature **ptr, uintptr_t size);
 
 /*
  * Clears the last error.

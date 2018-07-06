@@ -1,5 +1,6 @@
 use std::io;
 use std::str;
+use serde_json;
 
 error_chain! {
     errors {
@@ -39,6 +40,7 @@ error_chain! {
         Io(io::Error);
         Utf8Error(str::Utf8Error);
         ParseInt(::std::num::ParseIntError);
+        SerdeError(serde_json::Error);
     }
 }
 
@@ -63,6 +65,7 @@ pub enum SourmashErrorCode {
     Io = 100_001,
     Utf8Error = 100_002,
     ParseInt = 100_003,
+    SerdeError = 100_004,
 }
 
 impl SourmashErrorCode {
@@ -80,6 +83,7 @@ impl SourmashErrorCode {
             ErrorKind::Io(..) => SourmashErrorCode::Io,
             ErrorKind::Utf8Error(..) => SourmashErrorCode::Utf8Error,
             ErrorKind::ParseInt(..) => SourmashErrorCode::ParseInt,
+            ErrorKind::SerdeError(..) => SourmashErrorCode::SerdeError,
             ErrorKind::__Nonexhaustive { .. } => unreachable!(),
         }
     }

@@ -5,6 +5,7 @@ extern crate ordslice;
 
 #[macro_use]
 extern crate serde_derive;
+extern crate serde_json;
 extern crate serde;
 
 #[cfg(feature = "from-finch")]
@@ -69,7 +70,7 @@ impl Hasher for NoHashHasher {
     fn finish(&self) -> u64 { self.0 }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KmerMinHash {
     pub num: u32,
     pub ksize: u32,
