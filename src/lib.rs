@@ -508,7 +508,7 @@ impl KmerMinHash {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Signature {
    #[serde(default = "default_class")]
    pub class: String,
@@ -524,9 +524,10 @@ pub struct Signature {
    pub license: String,
 
    pub signatures: Vec<KmerMinHash>,
+
+   #[serde(default = "default_version")]
    pub version: f64
 }
-
 
 fn default_license() -> String {
     "CC0".to_string()
@@ -534,6 +535,39 @@ fn default_license() -> String {
 
 fn default_class() -> String {
     "sourmash_signature".to_string()
+}
+
+fn default_version() -> f64 {
+    0.4
+}
+
+impl Default for Signature {
+    fn default() -> Signature {
+        Signature {
+            class: default_class(),
+            email: "".to_string(),
+            hash_function: "0.murmur64".to_string(),
+            license: default_license(),
+            filename: None,
+            name: None,
+            signatures: Vec::<KmerMinHash>::new(),
+            version: default_version()
+        }
+    }
+}
+
+impl Signature {
+    pub fn eq(&self, other: &Signature) -> bool {
+        if self.class == other.class &&
+           self.email == other.email &&
+           self.hash_function == other.hash_function &&
+           self.filename == other.filename &&
+           self.name == other.name {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[inline]

@@ -103,7 +103,7 @@ void signature_push_mh(Signature *ptr, const KmerMinHash *other);
 
 KmerMinHash *signature_first_mh(Signature *ptr);
 
-const Signature *signatures_load_buffer(const char *buffer);
+const Signature *signatures_load_buffer(const char *buffer, bool ignore_md5sum);
 
 SourmashStr signature_get_name(Signature *ptr);
 

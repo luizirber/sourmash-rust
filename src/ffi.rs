@@ -419,6 +419,22 @@ unsafe fn signature_first_mh(ptr: *mut Signature) -> Result<*mut KmerMinHash> {
 }
 
 ffi_fn! {
+unsafe fn signature_eq(ptr: *mut Signature, other: *mut Signature) -> Result<bool> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    let other_sig = {
+        assert!(!other.is_null());
+        &mut *other
+    };
+
+    Ok(sig.eq(other_sig))
+}
+}
+
+ffi_fn! {
 unsafe fn signature_save_json(ptr: *mut Signature) -> Result<SourmashStr> {
     let sig = {
         assert!(!ptr.is_null());
@@ -439,17 +455,19 @@ unsafe fn signatures_save_buffer(ptr: *mut *mut Signature, size: usize) -> Resul
 
     let rsigs: Vec<&Signature> = sigs.iter().map(|x| x.as_ref().unwrap()).collect();
     let st = serde_json::to_string(&rsigs)?;
-    Ok(SourmashStr::new(&st))
+    Ok(SourmashStr::from_string(st))
 }
 }
 
 ffi_fn! {
-unsafe fn signatures_load_buffer(ptr: *const c_char) -> Result<*const Signature> {
+unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool) -> Result<*const Signature> {
     let c_str = {
         assert!(!ptr.is_null());
 
         CStr::from_ptr(ptr)
     };
+
+    // TODO: implement ignore_md5sum
 
     let sigs: Vec<Signature> = serde_json::from_str(c_str.to_str()?)?;
     let out_ptr = sigs.as_ptr();
