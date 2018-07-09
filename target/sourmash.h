@@ -113,6 +113,8 @@ SourmashStr signature_get_name(Signature *ptr);
 
 SourmashStr signature_get_filename(Signature *ptr);
 
+SourmashStr signature_get_license(Signature *ptr);
+
 SourmashStr signatures_save_buffer(Signature **ptr, uintptr_t size);
 
 /*

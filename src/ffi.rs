@@ -404,9 +404,9 @@ unsafe fn signature_get_name(ptr: *mut Signature) -> Result<SourmashStr> {
     };
 
     if let Some(ref name) = sig.name {
-        Ok(SourmashStr::new(&name))
+        Ok(SourmashStr::from_string(name.to_string()))
     } else {
-        Ok(SourmashStr::new(""))
+        Ok(SourmashStr::from_string("".to_string()))
     }
 }
 }
@@ -419,10 +419,21 @@ unsafe fn signature_get_filename(ptr: *mut Signature) -> Result<SourmashStr> {
     };
 
     if let Some(ref name) = sig.filename {
-        Ok(SourmashStr::new(&name))
+        Ok(SourmashStr::from_string(name.to_string()))
     } else {
-        Ok(SourmashStr::new(""))
+        Ok(SourmashStr::from_string("".to_string()))
     }
+}
+}
+
+ffi_fn! {
+unsafe fn signature_get_license(ptr: *mut Signature) -> Result<SourmashStr> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    Ok(SourmashStr::from_string(sig.license.to_string()))
 }
 }
 
@@ -466,7 +477,7 @@ unsafe fn signature_save_json(ptr: *mut Signature) -> Result<SourmashStr> {
     };
 
     let st = serde_json::to_string(sig)?;
-    Ok(SourmashStr::new(&st))
+    Ok(SourmashStr::from_string(st))
 }
 }
 

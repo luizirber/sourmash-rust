@@ -150,8 +150,10 @@ impl<'de> Deserialize<'de> for KmerMinHash {
 
         let tmpsig = TempSig::deserialize(deserializer)?;
 
+        let num = if tmpsig.max_hash != 0 {0} else {tmpsig.num};
+
         Ok(KmerMinHash {
-            num: tmpsig.num,
+            num: num,
             ksize: tmpsig.ksize,
             seed: tmpsig.seed,
             max_hash: tmpsig.max_hash,
