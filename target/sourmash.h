@@ -91,6 +91,8 @@ uint32_t kmerminhash_num(KmerMinHash *ptr);
 
 uint64_t kmerminhash_seed(KmerMinHash *ptr);
 
+bool kmerminhash_track_abundance(KmerMinHash *ptr);
+
 void signature_free(Signature *ptr);
 
 Signature *signature_new(void);
@@ -103,9 +105,13 @@ void signature_push_mh(Signature *ptr, const KmerMinHash *other);
 
 KmerMinHash *signature_first_mh(Signature *ptr);
 
-const Signature *signatures_load_buffer(const char *buffer, bool ignore_md5sum);
+bool signature_eq(Signature *ptr, Signature *other);
+
+const Signature **signatures_load_buffer(const char *buffer, bool ignore_md5sum, uintptr_t *size);
 
 SourmashStr signature_get_name(Signature *ptr);
+
+SourmashStr signature_get_filename(Signature *ptr);
 
 SourmashStr signatures_save_buffer(Signature **ptr, uintptr_t size);
 

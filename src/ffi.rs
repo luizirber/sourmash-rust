@@ -204,6 +204,15 @@ pub extern "C" fn kmerminhash_seed(ptr: *mut KmerMinHash) -> u64 {
 }
 
 #[no_mangle]
+pub extern "C" fn kmerminhash_track_abundance(ptr: *mut KmerMinHash) -> bool {
+    let mh = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    !mh.abunds.is_none()
+}
+
+#[no_mangle]
 pub extern "C" fn kmerminhash_num(ptr: *mut KmerMinHash) -> u32 {
     let mh = unsafe {
         assert!(!ptr.is_null());
@@ -403,6 +412,21 @@ unsafe fn signature_get_name(ptr: *mut Signature) -> Result<SourmashStr> {
 }
 
 ffi_fn! {
+unsafe fn signature_get_filename(ptr: *mut Signature) -> Result<SourmashStr> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    if let Some(ref name) = sig.filename {
+        Ok(SourmashStr::new(&name))
+    } else {
+        Ok(SourmashStr::new(""))
+    }
+}
+}
+
+ffi_fn! {
 unsafe fn signature_first_mh(ptr: *mut Signature) -> Result<*mut KmerMinHash> {
     let sig = {
         assert!(!ptr.is_null());
@@ -410,7 +434,7 @@ unsafe fn signature_first_mh(ptr: *mut Signature) -> Result<*mut KmerMinHash> {
     };
 
     if let Some(mh) = sig.signatures.get(0) {
-        Ok(mem::transmute(Box::new(mh)))
+        Ok(mem::transmute(Box::new(mh.clone())))
     } else {
         // TODO: this is totally wrong
         Ok(mem::transmute(Box::new(KmerMinHash::default())))
@@ -460,7 +484,7 @@ unsafe fn signatures_save_buffer(ptr: *mut *mut Signature, size: usize) -> Resul
 }
 
 ffi_fn! {
-unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool) -> Result<*const Signature> {
+unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool, size: *mut usize) -> Result<*mut *mut Signature> {
     let c_str = {
         assert!(!ptr.is_null());
 
@@ -470,9 +494,17 @@ unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool) -> Res
     // TODO: implement ignore_md5sum
 
     let sigs: Vec<Signature> = serde_json::from_str(c_str.to_str()?)?;
-    let out_ptr = sigs.as_ptr();
-    mem::forget(out_ptr);
+    let ptr_sigs: Vec<*mut Signature> = sigs.into_iter().map(|x| {
+        let y = mem::transmute(Box::new(x));
+        mem::forget(y);
+        y
+    }).collect();
 
-    Ok(out_ptr)
+    let mut b = ptr_sigs.into_boxed_slice();
+    let ptr = b.as_mut_ptr();
+    *size = b.len();
+    mem::forget(b);
+
+    Ok(ptr)
 }
 }

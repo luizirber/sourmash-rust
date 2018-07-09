@@ -70,7 +70,7 @@ impl Hasher for NoHashHasher {
     fn finish(&self) -> u64 { self.0 }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct KmerMinHash {
     pub num: u32,
     pub ksize: u32,
@@ -107,7 +107,7 @@ impl Serialize for KmerMinHash {
 
         let mut md5_ctx = md5::Context::new();
         md5_ctx.consume(&self.ksize.to_string());
-        self.mins.iter().map(|x| md5_ctx.consume(x.to_string()));
+        self.mins.iter().map(|x| md5_ctx.consume(x.to_string())).count();
 
         let mut partial = serializer.serialize_struct("KmerMinHash", n_fields)?;
         partial.serialize_field("num", &self.num)?;
@@ -558,7 +558,7 @@ impl Default for Signature {
 
 impl Signature {
     pub fn eq(&self, other: &Signature) -> bool {
-        if self.class == other.class &&
+        let metadata = if self.class == other.class &&
            self.email == other.email &&
            self.hash_function == other.hash_function &&
            self.filename == other.filename &&
@@ -566,7 +566,10 @@ impl Signature {
             true
         } else {
             false
-        }
+        };
+        let mh = self.signatures.get(0).unwrap();
+        let other_mh = other.signatures.get(0).unwrap();
+        metadata && (mh == other_mh)
     }
 }
 
