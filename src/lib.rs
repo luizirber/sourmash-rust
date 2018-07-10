@@ -383,8 +383,8 @@ impl KmerMinHash {
             self.is_protein, self.seed, self.max_hash,
             !self.abunds.is_none());
 
-        combined_mh.merge(&self);
-        combined_mh.merge(&other);
+        combined_mh.merge(&self)?;
+        combined_mh.merge(&other)?;
 
         let s1: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
         let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(other.mins.iter());
@@ -404,8 +404,8 @@ impl KmerMinHash {
             self.is_protein, self.seed, self.max_hash,
             !self.abunds.is_none());
 
-        combined_mh.merge(&self);
-        combined_mh.merge(&other);
+        combined_mh.merge(&self)?;
+        combined_mh.merge(&other)?;
 
         let s1: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
         let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(other.mins.iter());

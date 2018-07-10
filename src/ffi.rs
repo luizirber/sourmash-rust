@@ -287,7 +287,7 @@ unsafe fn kmerminhash_intersection(ptr: *mut KmerMinHash, other: *const KmerMinH
        &*other
     };
 
-    if let Ok((common, size)) = mh.intersection(other_mh) {
+    if let Ok((_, size)) = mh.intersection(other_mh) {
         return Ok(size);
     }
     Ok(0)
