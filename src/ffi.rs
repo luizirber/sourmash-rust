@@ -2,7 +2,10 @@ use std::ffi::CStr;
 use std::mem;
 use std::ptr;
 use std::os::raw::c_char;
-use {_hash_murmur, KmerMinHash};
+use std::slice;
+use {_hash_murmur, KmerMinHash, Signature};
+use utils::SourmashStr;
+use serde_json;
 
 #[no_mangle]
 pub extern "C" fn hash_murmur(kmer: *const c_char, seed: u64) -> u64 {
@@ -201,6 +204,15 @@ pub extern "C" fn kmerminhash_seed(ptr: *mut KmerMinHash) -> u64 {
 }
 
 #[no_mangle]
+pub extern "C" fn kmerminhash_track_abundance(ptr: *mut KmerMinHash) -> bool {
+    let mh = unsafe {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    !mh.abunds.is_none()
+}
+
+#[no_mangle]
 pub extern "C" fn kmerminhash_num(ptr: *mut KmerMinHash) -> u32 {
     let mh = unsafe {
         assert!(!ptr.is_null());
@@ -307,5 +319,203 @@ unsafe fn kmerminhash_compare(ptr: *mut KmerMinHash, other: *const KmerMinHash)
     };
 
     mh.compare(other_mh)
+}
+}
+
+// Signature methods
+
+#[no_mangle]
+pub unsafe extern "C" fn signature_new() -> *mut Signature {
+    mem::transmute(Box::new(Signature::default()))
+}
+
+#[no_mangle]
+pub extern "C" fn signature_free(ptr: *mut Signature) {
+    if ptr.is_null() {
+        return;
+    }
+    unsafe {
+        Box::from_raw(ptr);
+    }
+}
+
+ffi_fn! {
+unsafe fn signature_set_name(ptr: *mut Signature, name: *const c_char) ->
+    Result<()> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    let c_str = {
+        assert!(!name.is_null());
+
+        CStr::from_ptr(name)
+    };
+
+    if let Ok(name) = c_str.to_str() {
+        sig.name = Some(name.to_string())
+    }
+    Ok(())
+}
+}
+
+ffi_fn! {
+unsafe fn signature_set_filename(ptr: *mut Signature, name: *const c_char) ->
+    Result<()> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    let c_str = {
+        assert!(!name.is_null());
+
+        CStr::from_ptr(name)
+    };
+
+    if let Ok(name) = c_str.to_str() {
+        sig.filename = Some(name.to_string())
+    }
+    Ok(())
+}
+}
+
+ffi_fn! {
+unsafe fn signature_push_mh(ptr: *mut Signature, other: *const KmerMinHash) ->
+    Result<()> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    let mh = {
+       assert!(!other.is_null());
+       &*other
+    };
+
+    sig.signatures.push(mh.clone());
+    Ok(())
+}
+}
+
+ffi_fn! {
+unsafe fn signature_get_name(ptr: *mut Signature) -> Result<SourmashStr> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    if let Some(ref name) = sig.name {
+        Ok(SourmashStr::from_string(name.to_string()))
+    } else {
+        Ok(SourmashStr::from_string("".to_string()))
+    }
+}
+}
+
+ffi_fn! {
+unsafe fn signature_get_filename(ptr: *mut Signature) -> Result<SourmashStr> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    if let Some(ref name) = sig.filename {
+        Ok(SourmashStr::from_string(name.to_string()))
+    } else {
+        Ok(SourmashStr::from_string("".to_string()))
+    }
+}
+}
+
+ffi_fn! {
+unsafe fn signature_get_license(ptr: *mut Signature) -> Result<SourmashStr> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    Ok(SourmashStr::from_string(sig.license.to_string()))
+}
+}
+
+ffi_fn! {
+unsafe fn signature_first_mh(ptr: *mut Signature) -> Result<*mut KmerMinHash> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    if let Some(mh) = sig.signatures.get(0) {
+        Ok(mem::transmute(Box::new(mh.clone())))
+    } else {
+        // TODO: this is totally wrong
+        Ok(mem::transmute(Box::new(KmerMinHash::default())))
+    }
+}
+}
+
+ffi_fn! {
+unsafe fn signature_eq(ptr: *mut Signature, other: *mut Signature) -> Result<bool> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    let other_sig = {
+        assert!(!other.is_null());
+        &mut *other
+    };
+
+    Ok(sig.eq(other_sig))
+}
+}
+
+ffi_fn! {
+unsafe fn signature_save_json(ptr: *mut Signature) -> Result<SourmashStr> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    let st = serde_json::to_string(sig)?;
+    Ok(SourmashStr::from_string(st))
+}
+}
+
+ffi_fn! {
+unsafe fn signatures_save_buffer(ptr: *mut *mut Signature, size: usize) -> Result<SourmashStr> {
+    let sigs = {
+        assert!(!ptr.is_null());
+        slice::from_raw_parts(ptr, size)
+    };
+
+    let rsigs: Vec<&Signature> = sigs.iter().map(|x| x.as_ref().unwrap()).collect();
+    let st = serde_json::to_string(&rsigs)?;
+    Ok(SourmashStr::from_string(st))
+}
+}
+
+ffi_fn! {
+unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool, size: *mut usize) -> Result<*mut *mut Signature> {
+    let c_str = {
+        assert!(!ptr.is_null());
+
+        CStr::from_ptr(ptr)
+    };
+
+    // TODO: implement ignore_md5sum
+
+    let sigs: Vec<Signature> = serde_json::from_str(c_str.to_str()?)?;
+    let ptr_sigs: Vec<*mut Signature> = sigs.into_iter().map(|x| {
+        let y = mem::transmute(Box::new(x));
+        mem::forget(y);
+        y
+    }).collect();
+
+    let mut b = ptr_sigs.into_boxed_slice();
+    let ptr = b.as_mut_ptr();
+    *size = b.len();
+    mem::forget(b);
+
+    Ok(ptr)
 }
 }

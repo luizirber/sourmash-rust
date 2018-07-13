@@ -1,6 +1,12 @@
 extern crate backtrace;
+extern crate md5;
 extern crate murmurhash3;
 extern crate ordslice;
+
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
+extern crate serde;
 
 #[cfg(feature = "from-finch")]
 extern crate finch;
@@ -22,6 +28,9 @@ pub mod ffi;
 
 #[cfg(feature = "from-finch")]
 pub mod from;
+
+use serde::ser::{Serialize, Serializer, SerializeStruct};
+use serde::de::{Deserialize, Deserializer};
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -61,7 +70,7 @@ impl Hasher for NoHashHasher {
     fn finish(&self) -> u64 { self.0 }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct KmerMinHash {
     pub num: u32,
     pub ksize: u32,
@@ -85,6 +94,80 @@ impl Default for KmerMinHash {
         }
     }
 }
+
+impl Serialize for KmerMinHash {
+    fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer
+    {
+        let n_fields = match &self.abunds {
+            Some(_) => 8,
+            _ => 7
+        };
+
+        let mut md5_ctx = md5::Context::new();
+        md5_ctx.consume(&self.ksize.to_string());
+        self.mins.iter().map(|x| md5_ctx.consume(x.to_string())).count();
+
+        let mut partial = serializer.serialize_struct("KmerMinHash", n_fields)?;
+        partial.serialize_field("num", &self.num)?;
+        partial.serialize_field("ksize", &self.ksize)?;
+        partial.serialize_field("seed", &self.seed)?;
+        partial.serialize_field("max_hash", &self.max_hash)?;
+        partial.serialize_field("mins", &self.mins)?;
+
+        partial.serialize_field("md5sum", &format!("{:x}", md5_ctx.compute()))?;
+
+        if let Some(abunds) = &self.abunds {
+            partial.serialize_field("abunds", abunds)?;
+        }
+
+        partial.serialize_field("molecule", match &self.is_protein {
+            true => "protein",
+            false => "DNA"
+        })?;
+
+        partial.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for KmerMinHash {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+    {
+        #[derive(Deserialize)]
+        struct TempSig {
+            num: u32,
+            ksize: u32,
+            seed: u64,
+            max_hash: u64,
+            md5sum: String,
+            mins: Vec<u64>,
+            abunds: Option<Vec<u64>>,
+            molecule: String,
+        }
+
+        let tmpsig = TempSig::deserialize(deserializer)?;
+
+        let num = if tmpsig.max_hash != 0 {0} else {tmpsig.num};
+
+        Ok(KmerMinHash {
+            num: num,
+            ksize: tmpsig.ksize,
+            seed: tmpsig.seed,
+            max_hash: tmpsig.max_hash,
+            mins: tmpsig.mins,
+            abunds: tmpsig.abunds,
+            is_protein: match tmpsig.molecule.as_ref() {
+                "protein" => true,
+                "DNA"     => false,
+                _         => false  // TODO: throw error
+            }
+        })
+    }
+}
+
 
 impl KmerMinHash {
     pub fn new(
@@ -424,6 +507,71 @@ impl KmerMinHash {
         } else {
             return Ok(0.0)
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Signature {
+   #[serde(default = "default_class")]
+   pub class: String,
+
+   #[serde(default)]
+   pub email: String,
+   pub hash_function: String,
+
+   pub filename: Option<String>,
+   pub name: Option<String>,
+
+   #[serde(default = "default_license")]
+   pub license: String,
+
+   pub signatures: Vec<KmerMinHash>,
+
+   #[serde(default = "default_version")]
+   pub version: f64
+}
+
+fn default_license() -> String {
+    "CC0".to_string()
+}
+
+fn default_class() -> String {
+    "sourmash_signature".to_string()
+}
+
+fn default_version() -> f64 {
+    0.4
+}
+
+impl Default for Signature {
+    fn default() -> Signature {
+        Signature {
+            class: default_class(),
+            email: "".to_string(),
+            hash_function: "0.murmur64".to_string(),
+            license: default_license(),
+            filename: None,
+            name: None,
+            signatures: Vec::<KmerMinHash>::new(),
+            version: default_version()
+        }
+    }
+}
+
+impl Signature {
+    pub fn eq(&self, other: &Signature) -> bool {
+        let metadata = if self.class == other.class &&
+           self.email == other.email &&
+           self.hash_function == other.hash_function &&
+           self.filename == other.filename &&
+           self.name == other.name {
+            true
+        } else {
+            false
+        };
+        let mh = self.signatures.get(0).unwrap();
+        let other_mh = other.signatures.get(0).unwrap();
+        metadata && (mh == other_mh)
     }
 }
 
