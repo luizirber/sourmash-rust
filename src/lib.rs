@@ -5,8 +5,8 @@ extern crate ordslice;
 
 #[macro_use]
 extern crate serde_derive;
-extern crate serde_json;
 extern crate serde;
+extern crate serde_json;
 
 #[cfg(feature = "from-finch")]
 extern crate finch;
@@ -29,12 +29,12 @@ pub mod ffi;
 #[cfg(feature = "from-finch")]
 pub mod from;
 
-use serde::ser::{Serialize, Serializer, SerializeStruct};
 use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::hash::{Hasher, BuildHasherDefault};
+use std::hash::{BuildHasherDefault, Hasher};
 use std::iter::FromIterator;
 use std::str;
 
@@ -61,13 +61,15 @@ impl Hasher for NoHashHasher {
     #[inline]
     fn write(&mut self, bytes: &[u8]) {
         *self = NoHashHasher(
-            ((bytes[0] as u64) << 24) +
-            ((bytes[1] as u64) << 16) +
-            ((bytes[2] as u64) << 8) +
-            (bytes[3] as u64)
+            ((bytes[0] as u64) << 24)
+                + ((bytes[1] as u64) << 16)
+                + ((bytes[2] as u64) << 8)
+                + (bytes[3] as u64),
         );
     }
-    fn finish(&self) -> u64 { self.0 }
+    fn finish(&self) -> u64 {
+        self.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -98,16 +100,19 @@ impl Default for KmerMinHash {
 impl Serialize for KmerMinHash {
     fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
     where
-        S: Serializer
+        S: Serializer,
     {
         let n_fields = match &self.abunds {
             Some(_) => 8,
-            _ => 7
+            _ => 7,
         };
 
         let mut md5_ctx = md5::Context::new();
         md5_ctx.consume(&self.ksize.to_string());
-        self.mins.iter().map(|x| md5_ctx.consume(x.to_string())).count();
+        self.mins
+            .iter()
+            .map(|x| md5_ctx.consume(x.to_string()))
+            .count();
 
         let mut partial = serializer.serialize_struct("KmerMinHash", n_fields)?;
         partial.serialize_field("num", &self.num)?;
@@ -122,10 +127,13 @@ impl Serialize for KmerMinHash {
             partial.serialize_field("abunds", abunds)?;
         }
 
-        partial.serialize_field("molecule", match &self.is_protein {
-            true => "protein",
-            false => "DNA"
-        })?;
+        partial.serialize_field(
+            "molecule",
+            match &self.is_protein {
+                true => "protein",
+                false => "DNA",
+            },
+        )?;
 
         partial.end()
     }
@@ -134,7 +142,7 @@ impl Serialize for KmerMinHash {
 impl<'de> Deserialize<'de> for KmerMinHash {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         #[derive(Deserialize)]
         struct TempSig {
@@ -150,7 +158,7 @@ impl<'de> Deserialize<'de> for KmerMinHash {
 
         let tmpsig = TempSig::deserialize(deserializer)?;
 
-        let num = if tmpsig.max_hash != 0 {0} else {tmpsig.num};
+        let num = if tmpsig.max_hash != 0 { 0 } else { tmpsig.num };
 
         Ok(KmerMinHash {
             num: num,
@@ -161,13 +169,12 @@ impl<'de> Deserialize<'de> for KmerMinHash {
             abunds: tmpsig.abunds,
             is_protein: match tmpsig.molecule.as_ref() {
                 "protein" => true,
-                "DNA"     => false,
-                _         => false  // TODO: throw error
-            }
+                "DNA" => false,
+                _ => false, // TODO: throw error
+            },
         })
     }
 }
-
 
 impl KmerMinHash {
     pub fn new(
@@ -234,7 +241,8 @@ impl KmerMinHash {
                     abunds.push(1);
                 }
                 return;
-            } else if hash <= self.max_hash || current_max > hash
+            } else if hash <= self.max_hash
+                || current_max > hash
                 || (self.mins.len() as u32) < self.num
             {
                 // "good" hash - within range, smaller than current entry, or
@@ -263,7 +271,8 @@ impl KmerMinHash {
                             abunds.pop();
                         }
                     }
-                } else { // pos == hash: hash value already in mins, inc count
+                } else {
+                    // pos == hash: hash value already in mins, inc count
                     if let Some(ref mut abunds) = self.abunds {
                         abunds[pos] += 1;
                     }
@@ -278,7 +287,10 @@ impl KmerMinHash {
     }
 
     pub fn add_sequence(&mut self, seq: &[u8], force: bool) -> Result<()> {
-        let sequence: Vec<u8> = seq.iter().map(|&x| (x as char).to_ascii_uppercase() as u8).collect();
+        let sequence: Vec<u8> = seq
+            .iter()
+            .map(|&x| (x as char).to_ascii_uppercase() as u8)
+            .collect();
         if sequence.len() >= (self.ksize as usize) {
             if !self.is_protein {
                 // dna
@@ -292,8 +304,9 @@ impl KmerMinHash {
                         }
                     } else {
                         if !force {
-                            return Err(ErrorKind::InvalidDNA(String::from_utf8(kmer.to_vec()).unwrap())
-                                .into());
+                            return Err(ErrorKind::InvalidDNA(
+                                String::from_utf8(kmer.to_vec()).unwrap(),
+                            ).into());
                         }
                     }
                 }
@@ -303,27 +316,26 @@ impl KmerMinHash {
                 let aa_ksize = self.ksize / 3;
 
                 for i in 0..3 {
-                    let substr: Vec<u8> = sequence.iter()
-                                         .cloned()
-                                         .skip(i)
-                                         .take(sequence.len() - i)
-                                         .collect();
+                    let substr: Vec<u8> = sequence
+                        .iter()
+                        .cloned()
+                        .skip(i)
+                        .take(sequence.len() - i)
+                        .collect();
                     let aa = to_aa(&substr);
 
                     aa.windows(aa_ksize as usize)
-                      .map(|n| self.add_word(n))
-                      .count();
+                        .map(|n| self.add_word(n))
+                        .count();
 
-                    let rc_substr: Vec<u8> = rc.iter()
-                                               .cloned()
-                                               .skip(i)
-                                               .take(rc.len() - i)
-                                               .collect();
+                    let rc_substr: Vec<u8> =
+                        rc.iter().cloned().skip(i).take(rc.len() - i).collect();
                     let aa_rc = to_aa(&rc_substr);
 
-                    aa_rc.windows(aa_ksize as usize)
-                      .map(|n| self.add_word(n))
-                      .count();
+                    aa_rc
+                        .windows(aa_ksize as usize)
+                        .map(|n| self.add_word(n))
+                        .count();
                 }
             }
         }
@@ -412,19 +424,18 @@ impl KmerMinHash {
             if let Some(oai) = other_abunds_iter {
                 merged_abunds.extend(oai);
             }
-
         }
-
 
         if merged.len() < (self.num as usize) || (self.num as usize) == 0 {
             self.mins = merged;
             self.abunds = Some(merged_abunds);
         } else {
-            self.mins = merged.iter()
-                           .map(|&x| x as u64)
-                           .take(self.num as usize)
-                           .collect();
-            self.abunds = Some(merged_abunds)  // TODO: reduce this one too
+            self.mins = merged
+                .iter()
+                .map(|&x| x as u64)
+                .take(self.num as usize)
+                .collect();
+            self.abunds = Some(merged_abunds) // TODO: reduce this one too
         }
         Ok(())
     }
@@ -449,29 +460,38 @@ impl KmerMinHash {
                 self.add_hash(item.0);
             }
         }
-       Ok(())
+        Ok(())
     }
 
     pub fn count_common(&mut self, other: &KmerMinHash) -> Result<u64> {
         self.check_compatible(other)?;
-        let s1: HashSet<&u64, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<&u64, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(other.mins.iter());
+        let s1: HashSet<&u64, BuildHasherDefault<NoHashHasher>> =
+            HashSet::from_iter(self.mins.iter());
+        let s2: HashSet<&u64, BuildHasherDefault<NoHashHasher>> =
+            HashSet::from_iter(other.mins.iter());
         Ok(s1.intersection(&s2).count() as u64)
     }
 
     pub fn intersection(&mut self, other: &KmerMinHash) -> Result<(Vec<u64>, u64)> {
         self.check_compatible(other)?;
 
-        let mut combined_mh = KmerMinHash::new(self.num, self.ksize,
-            self.is_protein, self.seed, self.max_hash,
-            !self.abunds.is_none());
+        let mut combined_mh = KmerMinHash::new(
+            self.num,
+            self.ksize,
+            self.is_protein,
+            self.seed,
+            self.max_hash,
+            !self.abunds.is_none(),
+        );
 
         combined_mh.merge(&self)?;
         combined_mh.merge(&other)?;
 
         let s1: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(other.mins.iter());
-        let s3: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(combined_mh.mins.iter());
+        let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> =
+            HashSet::from_iter(other.mins.iter());
+        let s3: HashSet<_, BuildHasherDefault<NoHashHasher>> =
+            HashSet::from_iter(combined_mh.mins.iter());
 
         let i1 = &s1 & &s2;
         let i2 = &i1 & &s3;
@@ -483,16 +503,23 @@ impl KmerMinHash {
     pub fn intersection_size(&mut self, other: &KmerMinHash) -> Result<(u64, u64)> {
         self.check_compatible(other)?;
 
-        let mut combined_mh = KmerMinHash::new(self.num, self.ksize,
-            self.is_protein, self.seed, self.max_hash,
-            !self.abunds.is_none());
+        let mut combined_mh = KmerMinHash::new(
+            self.num,
+            self.ksize,
+            self.is_protein,
+            self.seed,
+            self.max_hash,
+            !self.abunds.is_none(),
+        );
 
         combined_mh.merge(&self)?;
         combined_mh.merge(&other)?;
 
         let s1: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(other.mins.iter());
-        let s3: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(combined_mh.mins.iter());
+        let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> =
+            HashSet::from_iter(other.mins.iter());
+        let s3: HashSet<_, BuildHasherDefault<NoHashHasher>> =
+            HashSet::from_iter(combined_mh.mins.iter());
 
         let i1 = &s1 & &s2;
         let i2 = &i1 & &s3;
@@ -503,32 +530,32 @@ impl KmerMinHash {
     pub fn compare(&mut self, other: &KmerMinHash) -> Result<f64> {
         self.check_compatible(other)?;
         if let Ok((common, size)) = self.intersection_size(other) {
-            return Ok(common as f64 / u64::max(1, size) as f64)
+            return Ok(common as f64 / u64::max(1, size) as f64);
         } else {
-            return Ok(0.0)
+            return Ok(0.0);
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Signature {
-   #[serde(default = "default_class")]
-   pub class: String,
+    #[serde(default = "default_class")]
+    pub class: String,
 
-   #[serde(default)]
-   pub email: String,
-   pub hash_function: String,
+    #[serde(default)]
+    pub email: String,
+    pub hash_function: String,
 
-   pub filename: Option<String>,
-   pub name: Option<String>,
+    pub filename: Option<String>,
+    pub name: Option<String>,
 
-   #[serde(default = "default_license")]
-   pub license: String,
+    #[serde(default = "default_license")]
+    pub license: String,
 
-   pub signatures: Vec<KmerMinHash>,
+    pub signatures: Vec<KmerMinHash>,
 
-   #[serde(default = "default_version")]
-   pub version: f64
+    #[serde(default = "default_version")]
+    pub version: f64,
 }
 
 fn default_license() -> String {
@@ -553,18 +580,19 @@ impl Default for Signature {
             filename: None,
             name: None,
             signatures: Vec::<KmerMinHash>::new(),
-            version: default_version()
+            version: default_version(),
         }
     }
 }
 
 impl Signature {
     pub fn eq(&self, other: &Signature) -> bool {
-        let metadata = if self.class == other.class &&
-           self.email == other.email &&
-           self.hash_function == other.hash_function &&
-           self.filename == other.filename &&
-           self.name == other.name {
+        let metadata = if self.class == other.class
+            && self.email == other.email
+            && self.hash_function == other.hash_function
+            && self.filename == other.filename
+            && self.name == other.name
+        {
             true
         } else {
             false
@@ -683,7 +711,7 @@ fn to_aa(seq: &[u8]) -> Vec<u8> {
 
     for chunk in seq.chunks(3) {
         if chunk.len() != 3 {
-            break
+            break;
         }
         if let Some(codon) = CODONTABLE.get(str::from_utf8(chunk).unwrap()) {
             converted.push(*codon);

@@ -1,11 +1,11 @@
+use serde_json;
 use std::ffi::CStr;
 use std::mem;
-use std::ptr;
 use std::os::raw::c_char;
+use std::ptr;
 use std::slice;
-use {_hash_murmur, KmerMinHash, Signature};
 use utils::SourmashStr;
-use serde_json;
+use {KmerMinHash, Signature, _hash_murmur};
 
 #[no_mangle]
 pub extern "C" fn hash_murmur(kmer: *const c_char, seed: u64) -> u64 {

@@ -1,6 +1,6 @@
+use serde_json;
 use std::io;
 use std::str;
-use serde_json;
 
 error_chain! {
     errors {

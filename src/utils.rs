@@ -1,12 +1,12 @@
-use std::ptr;
-use std::str;
-use std::slice;
-use std::panic;
-use std::thread;
 use std::cell::RefCell;
-use std::os::raw::c_char;
-use std::mem;
 use std::ffi::CStr;
+use std::mem;
+use std::os::raw::c_char;
+use std::panic;
+use std::ptr;
+use std::slice;
+use std::str;
+use std::thread;
 
 use backtrace::Backtrace;
 
@@ -63,8 +63,8 @@ fn notify_err(err: Error) {
 /// that needs to be freed with `sourmash_str_free`.
 #[no_mangle]
 pub unsafe extern "C" fn sourmash_err_get_last_message() -> SourmashStr {
-    use std::fmt::Write;
     use std::error::Error;
+    use std::fmt::Write;
     LAST_ERROR.with(|e| {
         if let Some(ref err) = *e.borrow() {
             let mut msg = err.to_string();
@@ -117,8 +117,12 @@ pub unsafe extern "C" fn sourmash_err_get_backtrace() -> SourmashStr {
 
                         if let Some(file) = symbol.filename() {
                             if let Some(filename) = file.file_name() {
-                                write!(&mut out, " ({}:{})", filename.to_string_lossy(),
-                                       symbol.lineno().unwrap_or(0)).ok();
+                                write!(
+                                    &mut out,
+                                    " ({}:{})",
+                                    filename.to_string_lossy(),
+                                    symbol.lineno().unwrap_or(0)
+                                ).ok();
                             }
                         }
                     }
@@ -170,23 +174,21 @@ pub unsafe fn set_panic_hook() {
 
         let msg = match info.payload().downcast_ref::<&str>() {
             Some(s) => *s,
-            None => {
-                match info.payload().downcast_ref::<String>() {
-                    Some(s) => &**s,
-                    None => "Box<Any>",
-                }
-            }
+            None => match info.payload().downcast_ref::<String>() {
+                Some(s) => &**s,
+                None => "Box<Any>",
+            },
         };
 
         let panic_info = match info.location() {
-            Some(location) => {
-                format!("thread '{}' panicked with '{}' at {}:{}",
-                                     thread, msg, location.file(),
-                                     location.line())
-            }
-            None => {
-                format!("thread '{}' panicked with '{}'", thread, msg)
-            }
+            Some(location) => format!(
+                "thread '{}' panicked with '{}' at {}:{}",
+                thread,
+                msg,
+                location.file(),
+                location.line()
+            ),
+            None => format!("thread '{}' panicked with '{}'", thread, msg),
         };
 
         LAST_BACKTRACE.with(|e| {
@@ -262,10 +264,7 @@ impl SourmashStr {
     }
 
     pub fn as_str(&self) -> &str {
-        unsafe {
-            str::from_utf8_unchecked(slice::from_raw_parts(
-                self.data as *const _, self.len))
-        }
+        unsafe { str::from_utf8_unchecked(slice::from_raw_parts(self.data as *const _, self.len)) }
     }
 }
 

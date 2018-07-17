@@ -6,8 +6,8 @@ extern crate finch;
 #[cfg(feature = "from-finch")]
 extern crate needletail;
 
-use std::collections::HashSet;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::iter::FromIterator;
 
 use sourmash::KmerMinHash;
@@ -46,7 +46,10 @@ fn finch_behavior() {
         println!("{:?}", smap);
         for item in b_hashes.iter() {
             assert!(smap.contains_key(&(item.hash as u64)));
-            assert!(**smap.get(&(item.hash as u64)).unwrap() == ((item.count + item.extra_count) as u64));
+            assert!(
+                **smap.get(&(item.hash as u64)).unwrap()
+                    == ((item.count + item.extra_count) as u64)
+            );
         }
     }
 }
