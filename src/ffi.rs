@@ -209,7 +209,7 @@ pub extern "C" fn kmerminhash_track_abundance(ptr: *mut KmerMinHash) -> bool {
         assert!(!ptr.is_null());
         &mut *ptr
     };
-    !mh.abunds.is_none()
+    mh.abunds.is_some()
 }
 
 #[no_mangle]
@@ -465,7 +465,7 @@ unsafe fn signature_eq(ptr: *mut Signature, other: *mut Signature) -> Result<boo
         &mut *other
     };
 
-    Ok(sig.eq(other_sig))
+    Ok(sig == other_sig)
 }
 }
 

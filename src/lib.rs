@@ -53,7 +53,7 @@ pub struct NoHashHasher(u64);
 impl Default for NoHashHasher {
     #[inline]
     fn default() -> NoHashHasher {
-        NoHashHasher(0x0000000000000000)
+        NoHashHasher(0x0)
     }
 }
 
@@ -61,10 +61,10 @@ impl Hasher for NoHashHasher {
     #[inline]
     fn write(&mut self, bytes: &[u8]) {
         *self = NoHashHasher(
-            ((bytes[0] as u64) << 24)
-                + ((bytes[1] as u64) << 16)
-                + ((bytes[2] as u64) << 8)
-                + (bytes[3] as u64),
+            (u64::from(bytes[0]) << 24)
+                + (u64::from(bytes[1]) << 16)
+                + (u64::from(bytes[2]) << 8)
+                + u64::from(bytes[3]),
         );
     }
     fn finish(&self) -> u64 {
@@ -161,7 +161,7 @@ impl<'de> Deserialize<'de> for KmerMinHash {
         let num = if tmpsig.max_hash != 0 { 0 } else { tmpsig.num };
 
         Ok(KmerMinHash {
-            num: num,
+            num,
             ksize: tmpsig.ksize,
             seed: tmpsig.seed,
             max_hash: tmpsig.max_hash,
@@ -233,7 +233,7 @@ impl KmerMinHash {
             None => u64::max_value(),
         };
 
-        if (self.max_hash != 0 && hash <= self.max_hash) || self.max_hash == 0 {
+        if hash <= self.max_hash || self.max_hash == 0 {
             // empty? add it, if within range / no range specified.
             if self.mins.is_empty() {
                 self.mins.push(hash);
@@ -271,11 +271,9 @@ impl KmerMinHash {
                             abunds.pop();
                         }
                     }
-                } else {
+                } else if let Some(ref mut abunds) = self.abunds {
                     // pos == hash: hash value already in mins, inc count
-                    if let Some(ref mut abunds) = self.abunds {
-                        abunds[pos] += 1;
-                    }
+                    abunds[pos] += 1;
                 }
             }
         }
@@ -302,12 +300,10 @@ impl KmerMinHash {
                         } else {
                             self.add_word(&rc);
                         }
-                    } else {
-                        if !force {
-                            return Err(ErrorKind::InvalidDNA(
-                                String::from_utf8(kmer.to_vec()).unwrap(),
-                            ).into());
-                        }
+                    } else if !force {
+                        return Err(ErrorKind::InvalidDNA(
+                            String::from_utf8(kmer.to_vec()).unwrap(),
+                        ).into());
                     }
                 }
             } else {
@@ -368,7 +364,7 @@ impl KmerMinHash {
 
             let mut self_value = self_iter.next();
             let mut other_value = other_iter.next();
-            while !self_value.is_none() {
+            while self_value.is_some() {
                 let value = self_value.unwrap();
                 match other_value {
                     None => {
@@ -447,15 +443,15 @@ impl KmerMinHash {
         Ok(())
     }
 
-    pub fn add_many(&mut self, hashes: Vec<u64>) -> Result<()> {
-        for min in hashes.iter() {
+    pub fn add_many(&mut self, hashes: &[u64]) -> Result<()> {
+        for min in hashes {
             self.add_hash(*min);
         }
         Ok(())
     }
 
-    pub fn add_many_with_abund(&mut self, hashes: Vec<(u64, u64)>) -> Result<()> {
-        for item in hashes.iter() {
+    pub fn add_many_with_abund(&mut self, hashes: &[(u64, u64)]) -> Result<()> {
+        for item in hashes {
             for _i in 0..item.1 {
                 self.add_hash(item.0);
             }
@@ -481,7 +477,7 @@ impl KmerMinHash {
             self.is_protein,
             self.seed,
             self.max_hash,
-            !self.abunds.is_none(),
+            self.abunds.is_some(),
         );
 
         combined_mh.merge(&self)?;
@@ -509,7 +505,7 @@ impl KmerMinHash {
             self.is_protein,
             self.seed,
             self.max_hash,
-            !self.abunds.is_none(),
+            self.abunds.is_some(),
         );
 
         combined_mh.merge(&self)?;
@@ -585,20 +581,16 @@ impl Default for Signature {
     }
 }
 
-impl Signature {
-    pub fn eq(&self, other: &Signature) -> bool {
-        let metadata = if self.class == other.class
+impl PartialEq for Signature {
+    fn eq(&self, other: &Signature) -> bool {
+        let metadata = self.class == other.class
             && self.email == other.email
             && self.hash_function == other.hash_function
             && self.filename == other.filename
-            && self.name == other.name
-        {
-            true
-        } else {
-            false
-        };
-        let mh = self.signatures.get(0).unwrap();
-        let other_mh = other.signatures.get(0).unwrap();
+            && self.name == other.name;
+
+        let mh = &self.signatures[0];
+        let other_mh = &other.signatures[0];
         metadata && (mh == other_mh)
     }
 }
@@ -621,85 +613,85 @@ lazy_static! {
     static ref CODONTABLE: HashMap<&'static str, u8> = {
         let mut m = HashMap::new();
 
-        m.insert("TTT", 'F' as u8);
-        m.insert("TTC", 'F' as u8);
-        m.insert("TTA", 'L' as u8);
-        m.insert("TTG", 'L' as u8);
+        m.insert("TTT", b'F');
+        m.insert("TTC", b'F');
+        m.insert("TTA", b'L');
+        m.insert("TTG", b'L');
 
-        m.insert("TCT", 'S' as u8);
-        m.insert("TCC", 'S' as u8);
-        m.insert("TCA", 'S' as u8);
-        m.insert("TCG", 'S' as u8);
+        m.insert("TCT", b'S');
+        m.insert("TCC", b'S');
+        m.insert("TCA", b'S');
+        m.insert("TCG", b'S');
 
-        m.insert("TAT", 'Y' as u8);
-        m.insert("TAC", 'Y' as u8);
-        m.insert("TAA", '*' as u8);
-        m.insert("TAG", '*' as u8);
+        m.insert("TAT", b'Y');
+        m.insert("TAC", b'Y');
+        m.insert("TAA", b'*');
+        m.insert("TAG", b'*');
 
-        m.insert("TGT", 'C' as u8);
-        m.insert("TGC", 'C' as u8);
-        m.insert("TGA", '*' as u8);
-        m.insert("TGG", 'W' as u8);
+        m.insert("TGT", b'C');
+        m.insert("TGC", b'C');
+        m.insert("TGA", b'*');
+        m.insert("TGG", b'W');
 
-        m.insert("CTT", 'L' as u8);
-        m.insert("CTC", 'L' as u8);
-        m.insert("CTA", 'L' as u8);
-        m.insert("CTG", 'L' as u8);
+        m.insert("CTT", b'L');
+        m.insert("CTC", b'L');
+        m.insert("CTA", b'L');
+        m.insert("CTG", b'L');
 
-        m.insert("CCT", 'P' as u8);
-        m.insert("CCC", 'P' as u8);
-        m.insert("CCA", 'P' as u8);
-        m.insert("CCG", 'P' as u8);
+        m.insert("CCT", b'P');
+        m.insert("CCC", b'P');
+        m.insert("CCA", b'P');
+        m.insert("CCG", b'P');
 
-        m.insert("CAT", 'H' as u8);
-        m.insert("CAC", 'H' as u8);
-        m.insert("CAA", 'Q' as u8);
-        m.insert("CAG", 'Q' as u8);
+        m.insert("CAT", b'H');
+        m.insert("CAC", b'H');
+        m.insert("CAA", b'Q');
+        m.insert("CAG", b'Q');
 
-        m.insert("CGT", 'R' as u8);
-        m.insert("CGC", 'R' as u8);
-        m.insert("CGA", 'R' as u8);
-        m.insert("CGG", 'R' as u8);
+        m.insert("CGT", b'R');
+        m.insert("CGC", b'R');
+        m.insert("CGA", b'R');
+        m.insert("CGG", b'R');
 
-        m.insert("ATT", 'I' as u8);
-        m.insert("ATC", 'I' as u8);
-        m.insert("ATA", 'I' as u8);
-        m.insert("ATG", 'M' as u8);
+        m.insert("ATT", b'I');
+        m.insert("ATC", b'I');
+        m.insert("ATA", b'I');
+        m.insert("ATG", b'M');
 
-        m.insert("ACT", 'T' as u8);
-        m.insert("ACC", 'T' as u8);
-        m.insert("ACA", 'T' as u8);
-        m.insert("ACG", 'T' as u8);
+        m.insert("ACT", b'T');
+        m.insert("ACC", b'T');
+        m.insert("ACA", b'T');
+        m.insert("ACG", b'T');
 
-        m.insert("AAT", 'N' as u8);
-        m.insert("AAC", 'N' as u8);
-        m.insert("AAA", 'K' as u8);
-        m.insert("AAG", 'K' as u8);
+        m.insert("AAT", b'N');
+        m.insert("AAC", b'N');
+        m.insert("AAA", b'K');
+        m.insert("AAG", b'K');
 
-        m.insert("AGT", 'S' as u8);
-        m.insert("AGC", 'S' as u8);
-        m.insert("AGA", 'R' as u8);
-        m.insert("AGG", 'R' as u8);
+        m.insert("AGT", b'S');
+        m.insert("AGC", b'S');
+        m.insert("AGA", b'R');
+        m.insert("AGG", b'R');
 
-        m.insert("GTT", 'V' as u8);
-        m.insert("GTC", 'V' as u8);
-        m.insert("GTA", 'V' as u8);
-        m.insert("GTG", 'V' as u8);
+        m.insert("GTT", b'V');
+        m.insert("GTC", b'V');
+        m.insert("GTA", b'V');
+        m.insert("GTG", b'V');
 
-        m.insert("GCT", 'A' as u8);
-        m.insert("GCC", 'A' as u8);
-        m.insert("GCA", 'A' as u8);
-        m.insert("GCG", 'A' as u8);
+        m.insert("GCT", b'A');
+        m.insert("GCC", b'A');
+        m.insert("GCA", b'A');
+        m.insert("GCG", b'A');
 
-        m.insert("GAT", 'D' as u8);
-        m.insert("GAC", 'D' as u8);
-        m.insert("GAA", 'E' as u8);
-        m.insert("GAG", 'E' as u8);
+        m.insert("GAT", b'D');
+        m.insert("GAC", b'D');
+        m.insert("GAA", b'E');
+        m.insert("GAG", b'E');
 
-        m.insert("GGT", 'G' as u8);
-        m.insert("GGC", 'G' as u8);
-        m.insert("GGA", 'G' as u8);
-        m.insert("GGG", 'G' as u8);
+        m.insert("GGT", b'G');
+        m.insert("GGC", b'G');
+        m.insert("GGA", b'G');
+        m.insert("GGG", b'G');
 
         m
     };
