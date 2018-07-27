@@ -1,7 +1,4 @@
-#![cfg_attr(
-    target_arch = "wasm32",
-    feature(use_extern_macros, wasm_custom_section, wasm_import_module)
-)]
+#![cfg_attr(target_arch = "wasm32", feature(use_extern_macros))]
 
 extern crate backtrace;
 #[macro_use]
