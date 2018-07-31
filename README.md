@@ -10,7 +10,7 @@
 [![](https://img.shields.io/crates/d/sourmash.svg)](https://crates.io/crates/sourmash)
 [![API Documentation on docs.rs](https://docs.rs/sourmash/badge.svg)](https://docs.rs/sourmash)
 
-[sourmash][sourmash] is a sourmash is a command-line tool and Python library for
+[sourmash][sourmash] is a command-line tool and Python library for
 computing MinHash sketches from DNA sequences, comparing them to each other, and
 plotting the results. This allows you to estimate sequence similarity between
 even very large data sets quickly and accurately. The core data structure is
