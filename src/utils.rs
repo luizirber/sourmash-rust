@@ -250,7 +250,7 @@ impl SourmashStr {
             len: s.len(),
             owned: true,
         };
-        mem::forget(s);
+        Box::into_raw(s.into_boxed_str());
         rv
     }
 

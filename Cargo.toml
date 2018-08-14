@@ -5,6 +5,7 @@ authors = ["Luiz Irber <luiz.irber@gmail.com>"]
 description = "MinHash sketches for genomic data"
 repository = "https://github.com/luizirber/sourmash-rust"
 keywords = ["minhash", "bioinformatics"]
+categories = ["science", "algorithms", "data-structures"]
 license = "BSD-3-Clause"
 
 [lib]

@@ -96,9 +96,8 @@ unsafe fn kmerminhash_get_mins(ptr: *mut KmerMinHash) -> Result<*const u64> {
         &mut *ptr
     };
     let output = mh.mins.clone();
-    let ptr = output.as_ptr();
-    mem::forget(output);
-    Ok(ptr)
+
+    Ok(Box::into_raw(output.into_boxed_slice()) as *const u64)
 }
 }
 
