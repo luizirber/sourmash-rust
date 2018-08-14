@@ -22,6 +22,7 @@ enum SourmashErrorCode {
   SOURMASH_ERROR_CODE_IO = 100001,
   SOURMASH_ERROR_CODE_UTF8_ERROR = 100002,
   SOURMASH_ERROR_CODE_PARSE_INT = 100003,
+  SOURMASH_ERROR_CODE_SERDE_ERROR = 100004,
 };
 typedef uint32_t SourmashErrorCode;
 
@@ -93,27 +94,29 @@ uint64_t kmerminhash_seed(KmerMinHash *ptr);
 
 bool kmerminhash_track_abundance(KmerMinHash *ptr);
 
-void signature_free(Signature *ptr);
-
-Signature *signature_new(void);
-
-void signature_set_name(Signature *ptr, const char *name);
-
-void signature_set_filename(Signature *ptr, const char *name);
-
-void signature_push_mh(Signature *ptr, const KmerMinHash *other);
+bool signature_eq(Signature *ptr, Signature *other);
 
 KmerMinHash *signature_first_mh(Signature *ptr);
 
-bool signature_eq(Signature *ptr, Signature *other);
-
-const Signature **signatures_load_buffer(const char *buffer, bool ignore_md5sum, uintptr_t *size);
-
-SourmashStr signature_get_name(Signature *ptr);
+void signature_free(Signature *ptr);
 
 SourmashStr signature_get_filename(Signature *ptr);
 
 SourmashStr signature_get_license(Signature *ptr);
+
+SourmashStr signature_get_name(Signature *ptr);
+
+Signature *signature_new(void);
+
+void signature_push_mh(Signature *ptr, const KmerMinHash *other);
+
+SourmashStr signature_save_json(Signature *ptr);
+
+void signature_set_filename(Signature *ptr, const char *name);
+
+void signature_set_name(Signature *ptr, const char *name);
+
+Signature **signatures_load_buffer(const char *ptr, bool ignore_md5sum, uintptr_t *size);
 
 SourmashStr signatures_save_buffer(Signature **ptr, uintptr_t size);
 

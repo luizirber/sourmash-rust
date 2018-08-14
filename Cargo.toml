@@ -19,7 +19,7 @@ lto=true
 from-finch = ["finch", "needletail"]
 
 [build-dependencies]
-cbindgen = "0.6.0"
+cbindgen = "0.6.1"
 
 [dependencies]
 backtrace = "0.3.4"
