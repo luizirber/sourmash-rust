@@ -104,6 +104,8 @@ SourmashStr signature_get_filename(Signature *ptr);
 
 SourmashStr signature_get_license(Signature *ptr);
 
+KmerMinHash **signature_get_mhs(Signature *ptr, uintptr_t *size);
+
 SourmashStr signature_get_name(Signature *ptr);
 
 Signature *signature_new(void);

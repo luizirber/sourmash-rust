@@ -479,6 +479,26 @@ unsafe fn signature_save_json(ptr: *mut Signature) -> Result<SourmashStr> {
 }
 
 ffi_fn! {
+unsafe fn signature_get_mhs(ptr: *mut Signature, size: *mut usize) -> Result<*mut *mut KmerMinHash> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+
+    let output = sig.signatures.clone();
+
+    let ptr_sigs: Vec<*mut Signature> = output.into_iter().map(|x| {
+      Box::into_raw(Box::new(x)) as *mut Signature
+    }).collect();
+
+    let b = ptr_sigs.into_boxed_slice();
+    *size = b.len();
+
+    Ok(Box::into_raw(b) as *mut *mut KmerMinHash)
+}
+}
+
+ffi_fn! {
 unsafe fn signatures_save_buffer(ptr: *mut *mut Signature, size: usize) -> Result<SourmashStr> {
     let sigs = {
         assert!(!ptr.is_null());
@@ -503,9 +523,7 @@ unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool, size: 
 
     let sigs: Vec<Signature> = serde_json::from_str(c_str.to_str()?)?;
     let ptr_sigs: Vec<*mut Signature> = sigs.into_iter().map(|x| {
-        let y = mem::transmute(Box::new(x));
-        mem::forget(y);
-        y
+      Box::into_raw(Box::new(x)) as *mut Signature
     }).collect();
 
     let b = ptr_sigs.into_boxed_slice();
