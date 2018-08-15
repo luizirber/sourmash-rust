@@ -109,9 +109,7 @@ unsafe fn kmerminhash_get_abunds(ptr: *mut KmerMinHash) -> Result<*const u64> {
     };
     if let Some(ref abunds) = mh.abunds {
         let output = abunds.clone();
-        let ptr = output.as_ptr();
-        mem::forget(output);
-        Ok(ptr)
+        Ok(Box::into_raw(output.into_boxed_slice()) as *const u64)
     } else {
         Ok(ptr::null())
     }
@@ -510,11 +508,9 @@ unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool, size: 
         y
     }).collect();
 
-    let mut b = ptr_sigs.into_boxed_slice();
-    let ptr = b.as_mut_ptr();
+    let b = ptr_sigs.into_boxed_slice();
     *size = b.len();
-    mem::forget(b);
 
-    Ok(ptr)
+    Ok(Box::into_raw(b) as *mut *mut Signature)
 }
 }
