@@ -87,11 +87,11 @@ cfg_if! {
         #[wasm_bindgen]
         #[derive(Debug, Clone, PartialEq)]
         pub struct KmerMinHash {
-            pub num: u32,
-            pub ksize: u32,
-            pub is_protein: bool,
-            pub seed: u64,
-            pub max_hash: u64,
+            num: u32,
+            ksize: u32,
+            is_protein: bool,
+            seed: u64,
+            max_hash: u64,
             mins: Vec<u64>,
             abunds: Option<Vec<u64>>,
         }

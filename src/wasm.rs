@@ -38,10 +38,12 @@ impl KmerMinHash {
         self.add_sequence(buf.as_bytes(), true);
     }
 
+    /*
     #[wasm_bindgen]
     pub fn add_hash_js(&mut self, h: u64) {
         self.add_hash(h);
     }
+    */
 
     #[wasm_bindgen]
     pub fn to_json(&mut self) -> String {
