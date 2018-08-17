@@ -11,8 +11,8 @@ main() {
         return
     fi
 
-    cross test --target $TARGET
-    cross test --target $TARGET --release
+    cross kcov --target $TARGET
+    cross kcov --target $TARGET --release
 
     # TODO: uncommented when binaries are available
     #cross run --target $TARGET
