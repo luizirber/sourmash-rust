@@ -34,7 +34,7 @@ For an example usage of the NPM package check [wort-dnd][wort-dnd].
 For more details, check [luizirber/2018-python-rust][poster] for a poster
 presented at [GCCBOSC][bosc] and [SciPy][scipy] 2018.
 
-[poster]: https://github,com/luizirber/2018-python-rust
+[poster]: https://github.com/luizirber/2018-python-rust
 [bosc]: https://gccbosc2018.sched.com/
 [scipy]: https://scipy2018.scipy.org/ehome/index.php?eventid=299527&tabid=712461&cid=2233543&sessionid=21618890&sessionchoice=1&
 
