@@ -22,8 +22,8 @@ pub mod errors;
 #[macro_use]
 pub mod utils;
 
-//#[macro_use]
-//pub mod ffi;
+#[macro_use]
+pub mod ffi;
 
 #[cfg(feature = "from-finch")]
 pub mod from;
@@ -35,7 +35,6 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::hash::Hasher;
 use std::iter::{repeat, FromIterator, Iterator, Peekable};
 use std::str;
 
@@ -45,31 +44,6 @@ use errors::{ErrorKind, Result};
 
 pub fn _hash_murmur(kmer: &[u8], seed: u64) -> u64 {
     murmurhash3_x64_128(kmer, seed).0
-}
-
-// This comes from finch
-pub struct NoHashHasher(u64);
-
-impl Default for NoHashHasher {
-    #[inline]
-    fn default() -> NoHashHasher {
-        NoHashHasher(0x0)
-    }
-}
-
-impl Hasher for NoHashHasher {
-    #[inline]
-    fn write(&mut self, bytes: &[u8]) {
-        *self = NoHashHasher(
-            (u64::from(bytes[0]) << 24)
-                + (u64::from(bytes[1]) << 16)
-                + (u64::from(bytes[2]) << 8)
-                + u64::from(bytes[3]),
-        );
-    }
-    fn finish(&self) -> u64 {
-        self.0
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -223,6 +197,18 @@ impl KmerMinHash {
         Ok(true)
     }
 
+    pub fn mins(&self) -> Vec<u64> {
+        self.mins.keys().map(|x| *x).collect()
+    }
+
+    pub fn abunds(&self) -> Option<Vec<u64>> {
+        if self.track_abundance {
+            Some(self.mins.values().map(|x| *x).collect())
+        } else {
+            None
+        }
+    }
+
     pub fn add_hash(&mut self, hash: u64) {
         let current_max = match self.mins.iter().next_back() {
             Some((k, _)) => *k,
@@ -316,10 +302,6 @@ impl KmerMinHash {
     }
 
     pub fn merge(&mut self, other: &KmerMinHash) -> Result<()> {
-        fn sumMerger(x: &u64, y: &u64) -> u64 {
-            x + y
-        }
-
         if other.mins.len() == 0 {
             return Ok(());
         }
@@ -339,10 +321,10 @@ impl KmerMinHash {
             let iter = MergeFnIter {
                 left: self_iter.peekable(),
                 right: other_iter.peekable(),
-                valueMerger: sumMerger,
+                value_merger: |x: &u64, y: &u64| x + y,
             };
 
-            mins = iter.into().collect();
+            mins = iter.collect();
         }
 
         self.mins = mins;
@@ -407,26 +389,33 @@ impl KmerMinHash {
     pub fn intersection_size(&mut self, other: &KmerMinHash) -> Result<(u64, u64)> {
         self.check_compatible(other)?;
 
-        let mut combined_mh = KmerMinHash::new(
-            self.num,
-            self.ksize,
-            self.is_protein,
-            self.seed,
-            self.max_hash,
-            self.track_abundance,
-        );
+        let size;
+        let len;
+        {
+            let mut combined_mh = KmerMinHash::new(
+                self.num,
+                self.ksize,
+                self.is_protein,
+                self.seed,
+                self.max_hash,
+                self.track_abundance,
+            );
 
-        combined_mh.merge(&self)?;
-        combined_mh.merge(&other)?;
+            combined_mh.merge(&self)?;
+            combined_mh.merge(&other)?;
 
-        let s1 = BTreeSet::from_iter(self.mins.keys());
-        let s2 = BTreeSet::from_iter(other.mins.keys());
-        let s3 = BTreeSet::from_iter(combined_mh.mins.keys());
+            let s1 = BTreeSet::from_iter(self.mins.keys());
+            let s2 = BTreeSet::from_iter(other.mins.keys());
+            let s3 = BTreeSet::from_iter(combined_mh.mins.keys());
 
-        let i1 = &s1 & &s2;
-        let i2 = &i1 & &s3;
+            let i1 = &s1 & &s2;
+            let i2 = &i1 & &s3;
 
-        Ok((i2.into_iter().count() as u64, combined_mh.mins.len() as u64))
+            size = i2.into_iter().count() as u64;
+            len = combined_mh.mins.len() as u64
+        }
+
+        Ok((size, len))
     }
 
     pub fn compare(&mut self, other: &KmerMinHash) -> Result<f64> {
@@ -501,22 +490,16 @@ impl PartialEq for Signature {
     }
 }
 
-struct MergeFnIter<K, V, F: Fn(V, V) -> V, I: Iterator<Item = (K, V)>>
-where
-    V: std::clone::Clone + Into<u64>,
-{
+struct MergeFnIter<'a, I: Iterator<Item = (&'a u64, &'a u64)>> {
     left: Peekable<I>,
     right: Peekable<I>,
-    valueMerger: F,
+    value_merger: fn(&u64, &u64) -> u64,
 }
 
-impl<K: Ord, V, F: Fn(V, V) -> V, I: Iterator<Item = (K, V)>> Iterator for MergeFnIter<K, V, F, I>
-where
-    V: std::clone::Clone + Into<u64>,
-{
-    type Item = (K, V);
+impl<'a, I: Iterator<Item = (&'a u64, &'a u64)>> Iterator for MergeFnIter<'a, I> {
+    type Item = (u64, u64);
 
-    fn next(&mut self) -> Option<(K, V)> {
+    fn next(&mut self) -> Option<(u64, u64)> {
         let res = match (self.left.peek(), self.right.peek()) {
             (Some(&(ref left_key, _)), Some(&(ref right_key, _))) => left_key.cmp(right_key),
             (Some(_), None) => Ordering::Less,
@@ -525,12 +508,18 @@ where
         };
 
         // Check which elements comes first and only advance the corresponding iterator.
-        // If two keys are equal, apply the valueMerger function to merge values.
+        // If two keys are equal, apply the value_merger function to merge values.
         match res {
-            Ordering::Less => self.left.next(),
-            Ordering::Greater => self.right.next(),
+            Ordering::Less => {
+                let (k, v) = self.left.next().unwrap();
+                Some((*k, *v))
+            }
+            Ordering::Greater => {
+                let (k, v) = self.right.next().unwrap();
+                Some((*k, *v))
+            }
             Ordering::Equal => match (self.left.next(), self.right.next()) {
-                (Some((keyl, vl)), Some((_, vr))) => Some((keyl, (self.valueMerger)(vl, vr))),
+                (Some((keyl, vl)), Some((_, vr))) => Some((*keyl, (self.value_merger)(vl, vr))),
                 _ => None,
             },
         }
