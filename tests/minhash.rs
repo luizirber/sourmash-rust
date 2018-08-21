@@ -37,7 +37,7 @@ fn merge() {
 
     a.merge(&b);
     assert_eq!(
-        a.mins,
+        a.mins(),
         vec![
             2996412506971915891,
             4448613756639084635,

@@ -95,9 +95,8 @@ unsafe fn kmerminhash_get_mins(ptr: *mut KmerMinHash) -> Result<*const u64> {
         assert!(!ptr.is_null());
         &mut *ptr
     };
-    let output = mh.mins.clone();
 
-    Ok(Box::into_raw(output.into_boxed_slice()) as *const u64)
+    Ok(Box::into_raw(mh.mins().into_boxed_slice()) as *const u64)
 }
 }
 
@@ -107,22 +106,11 @@ unsafe fn kmerminhash_get_abunds(ptr: *mut KmerMinHash) -> Result<*const u64> {
         assert!(!ptr.is_null());
         &mut *ptr
     };
-    if let Some(ref abunds) = mh.abunds {
-        let output = abunds.clone();
-        Ok(Box::into_raw(output.into_boxed_slice()) as *const u64)
+    if let Some(abunds) = mh.abunds() {
+        Ok(Box::into_raw(abunds.into_boxed_slice()) as *const u64)
     } else {
         Ok(ptr::null())
     }
-}
-}
-
-ffi_fn! {
-unsafe fn kmerminhash_get_min_idx(ptr: *mut KmerMinHash, idx: u64) -> Result<u64> {
-    let mh = {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-    Ok(mh.mins[idx as usize])
 }
 }
 
@@ -136,26 +124,12 @@ pub extern "C" fn kmerminhash_get_mins_size(ptr: *mut KmerMinHash) -> usize {
 }
 
 #[no_mangle]
-pub extern "C" fn kmerminhash_mins_push(ptr: *mut KmerMinHash, val: u64) {
+pub extern "C" fn kmerminhash_push(ptr: *mut KmerMinHash, key: u64, val: u64) {
     let mh = unsafe {
         assert!(!ptr.is_null());
         &mut *ptr
     };
-    mh.mins.push(val)
-}
-
-ffi_fn! {
-unsafe fn kmerminhash_get_abund_idx(ptr: *mut KmerMinHash, idx: u64) -> Result<u64> {
-    let mh = {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-    if let Some(ref mut abunds) = mh.abunds {
-      Ok(abunds[idx as usize])
-    } else {
-      Ok(0)
-    }
-}
+    mh.mins.insert(key, val);
 }
 
 #[no_mangle]
@@ -164,21 +138,10 @@ pub extern "C" fn kmerminhash_get_abunds_size(ptr: *mut KmerMinHash) -> usize {
         assert!(!ptr.is_null());
         &mut *ptr
     };
-    if let Some(ref mut abunds) = mh.abunds {
-        abunds.len()
+    if mh.track_abundance {
+        mh.mins.len()
     } else {
         0
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn kmerminhash_abunds_push(ptr: *mut KmerMinHash, val: u64) {
-    let mh = unsafe {
-        assert!(!ptr.is_null());
-        &mut *ptr
-    };
-    if let Some(ref mut abunds) = mh.abunds {
-        abunds.push(val)
     }
 }
 
@@ -206,7 +169,7 @@ pub extern "C" fn kmerminhash_track_abundance(ptr: *mut KmerMinHash) -> bool {
         assert!(!ptr.is_null());
         &mut *ptr
     };
-    mh.abunds.is_some()
+    mh.track_abundance
 }
 
 #[no_mangle]

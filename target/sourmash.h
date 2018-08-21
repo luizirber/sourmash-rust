@@ -41,8 +41,6 @@ typedef struct {
 
 uint64_t hash_murmur(const char *kmer, uint64_t seed);
 
-void kmerminhash_abunds_push(KmerMinHash *ptr, uint64_t val);
-
 void kmerminhash_add_from(KmerMinHash *ptr, const KmerMinHash *other);
 
 void kmerminhash_add_hash(KmerMinHash *ptr, uint64_t h);
@@ -57,13 +55,9 @@ uint64_t kmerminhash_count_common(KmerMinHash *ptr, const KmerMinHash *other);
 
 void kmerminhash_free(KmerMinHash *ptr);
 
-uint64_t kmerminhash_get_abund_idx(KmerMinHash *ptr, uint64_t idx);
-
 const uint64_t *kmerminhash_get_abunds(KmerMinHash *ptr);
 
 uintptr_t kmerminhash_get_abunds_size(KmerMinHash *ptr);
-
-uint64_t kmerminhash_get_min_idx(KmerMinHash *ptr, uint64_t idx);
 
 const uint64_t *kmerminhash_get_mins(KmerMinHash *ptr);
 
@@ -79,8 +73,6 @@ uint64_t kmerminhash_max_hash(KmerMinHash *ptr);
 
 void kmerminhash_merge(KmerMinHash *ptr, const KmerMinHash *other);
 
-void kmerminhash_mins_push(KmerMinHash *ptr, uint64_t val);
-
 KmerMinHash *kmerminhash_new(uint32_t n,
                              uint32_t k,
                              bool prot,
@@ -89,6 +81,8 @@ KmerMinHash *kmerminhash_new(uint32_t n,
                              bool track_abundance);
 
 uint32_t kmerminhash_num(KmerMinHash *ptr);
+
+void kmerminhash_push(KmerMinHash *ptr, uint64_t key, uint64_t val);
 
 uint64_t kmerminhash_seed(KmerMinHash *ptr);
 
