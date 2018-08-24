@@ -1,6 +1,6 @@
 [package]
 name = "sourmash"
-version = "0.1.1"
+version = "0.2.1"
 authors = ["Luiz Irber <luiz.irber@gmail.com>"]
 description = "MinHash sketches for genomic data"
 repository = "https://github.com/luizirber/sourmash-rust"
@@ -23,6 +23,7 @@ cbindgen = "0.6.1"
 
 [dependencies]
 backtrace = "0.3.4"
+cfg-if = "0.1"
 error-chain = "0.12"
 finch = { version = "0.1.6", optional = true }
 lazy_static = "1.0.0"
@@ -32,4 +33,10 @@ needletail = { version = "~0.2.1", optional = true }
 ordslice = "0.3.0"
 serde = "1.0"
 serde_derive = "1.0"
-serde_json = "1.0.2"
+serde_json = "1.0"
+
+#TODO: wasm-pack can't check optionals or this kind of config yet...
+# [target. 'cfg(target_arch = "wasm32")'.dependencies]
+[dependencies.wasm-bindgen]
+version = "^0.2"
+features = ["serde-serialize"]

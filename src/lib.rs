@@ -1,4 +1,7 @@
 extern crate backtrace;
+#[macro_use]
+extern crate cfg_if;
+
 extern crate md5;
 extern crate murmurhash3;
 extern crate ordslice;
@@ -29,9 +32,6 @@ pub mod ffi;
 #[cfg(feature = "from-finch")]
 pub mod from;
 
-use serde::de::{Deserialize, Deserializer};
-use serde::ser::{Serialize, SerializeStruct, Serializer};
-
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::{BuildHasherDefault, Hasher};
@@ -40,6 +40,8 @@ use std::str;
 
 use murmurhash3::murmurhash3_x64_128;
 use ordslice::Ext;
+use serde::de::{Deserialize, Deserializer};
+use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 use errors::{ErrorKind, Result};
 
@@ -72,15 +74,37 @@ impl Hasher for NoHashHasher {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct KmerMinHash {
-    pub num: u32,
-    pub ksize: u32,
-    pub is_protein: bool,
-    pub seed: u64,
-    pub max_hash: u64,
-    pub mins: Vec<u64>,
-    pub abunds: Option<Vec<u64>>,
+cfg_if! {
+    if #[cfg(target_arch = "wasm32")] {
+        extern crate wasm_bindgen;
+
+        use wasm_bindgen::prelude::*;
+
+        pub mod wasm;
+
+        #[wasm_bindgen]
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct KmerMinHash {
+            num: u32,
+            ksize: u32,
+            is_protein: bool,
+            seed: u64,
+            max_hash: u64,
+            mins: Vec<u64>,
+            abunds: Option<Vec<u64>>,
+        }
+    } else {
+        #[derive(Debug, Clone, PartialEq)]
+        pub struct KmerMinHash {
+            pub num: u32,
+            pub ksize: u32,
+            pub is_protein: bool,
+            pub seed: u64,
+            pub max_hash: u64,
+            pub mins: Vec<u64>,
+            pub abunds: Option<Vec<u64>>,
+        }
+    }
 }
 
 impl Default for KmerMinHash {
@@ -530,6 +554,10 @@ impl KmerMinHash {
         } else {
             return Ok(0.0);
         }
+    }
+
+    pub fn to_vec(&self) -> Vec<u64> {
+        self.mins.clone()
     }
 }
 
