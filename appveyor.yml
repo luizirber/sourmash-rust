@@ -80,6 +80,10 @@ branches:
     # Release tags
     - /^v\d+\.\d+\.\d+.*$/
     - master
+    # This is where pull requests from "bors r+" are built.
+    - staging
+    # This is where pull requests from "bors try" are built.
+    - trying
 
 notifications:
   - provider: Email
