@@ -394,6 +394,23 @@ unsafe fn signature_push_mh(ptr: *mut Signature, other: *const KmerMinHash) ->
 }
 
 ffi_fn! {
+unsafe fn signature_set_mh(ptr: *mut Signature, other: *const KmerMinHash) ->
+    Result<()> {
+    let sig = {
+        assert!(!ptr.is_null());
+        &mut *ptr
+    };
+    let mh = {
+       assert!(!other.is_null());
+       &*other
+    };
+
+    sig.signatures = vec![mh.clone()];
+    Ok(())
+}
+}
+
+ffi_fn! {
 unsafe fn signature_get_name(ptr: *mut Signature) -> Result<SourmashStr> {
     let sig = {
         assert!(!ptr.is_null());
@@ -512,17 +529,66 @@ unsafe fn signatures_save_buffer(ptr: *mut *mut Signature, size: usize) -> Resul
 }
 
 ffi_fn! {
-unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool, size: *mut usize) -> Result<*mut *mut Signature> {
+unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool,
+                                 ksize: usize,
+                                 select_moltype: *const c_char,
+                                 size: *mut usize) -> Result<*mut *mut Signature> {
+
     let c_str = {
         assert!(!ptr.is_null());
 
         CStr::from_ptr(ptr)
     };
 
+    let moltype = {
+        if select_moltype.is_null() {
+          None
+        } else {
+          Some(CStr::from_ptr(select_moltype))
+        }
+    };
+
+
     // TODO: implement ignore_md5sum
 
-    let sigs: Vec<Signature> = serde_json::from_str(c_str.to_str()?)?;
-    let ptr_sigs: Vec<*mut Signature> = sigs.into_iter().map(|x| {
+    let orig_sigs: Vec<Signature> = serde_json::from_str(c_str.to_str()?)?;
+
+    let flat_sigs = orig_sigs.into_iter().flat_map(|s| {
+      s.signatures.iter().map(|mh| {
+          let mut new_s = s.clone();
+          new_s.signatures = vec![mh.clone()];
+          new_s
+      }).collect::<Vec<Signature>>()
+    });
+
+    let filtered_sigs = flat_sigs.into_iter()
+       .filter_map(|mut sig| {
+         let good_mhs: Vec<KmerMinHash> = sig.signatures.into_iter().filter_map(|mh| {
+           if ksize == 0 || ksize == mh.ksize as usize {
+             match moltype {
+              Some(x) => {if x.to_str() == Ok("DNA") && mh.is_protein == false {
+                  return Some(mh)
+                } else if x.to_str() == Ok("protein") && mh.is_protein {
+                  return Some(mh)
+                }},
+              None => {
+                 return Some(mh)
+              }
+             };
+           };
+           None
+         }).collect();
+
+        if good_mhs.is_empty() {
+          return None
+        };
+
+        sig.signatures = good_mhs;
+        Some(sig)
+       });
+
+
+    let ptr_sigs: Vec<*mut Signature> = filtered_sigs.into_iter().map(|x| {
       Box::into_raw(Box::new(x)) as *mut Signature
     }).collect();
 

@@ -533,7 +533,7 @@ impl KmerMinHash {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Signature {
     #[serde(default = "default_class")]
     pub class: String,
@@ -598,15 +598,15 @@ impl PartialEq for Signature {
 #[inline]
 fn revcomp(seq: &[u8]) -> Vec<u8> {
     seq.iter()
-       .rev()
-       .map(|n| match *n as char {
-             'A' | 'a' => 'T',
-             'T' | 't' => 'A',
-             'C' | 'c' => 'G',
-             'G' | 'g' => 'C',
-             x => x
-            } as u8) // TODO: error?
-       .collect()
+        .rev()
+        .map(|n| match *n as char {
+            'A' | 'a' => 'T',
+            'T' | 't' => 'A',
+            'C' | 'c' => 'G',
+            'G' | 'g' => 'C',
+            x => x,
+        } as u8) // TODO: error?
+        .collect()
 }
 
 lazy_static! {
