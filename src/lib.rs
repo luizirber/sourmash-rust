@@ -124,7 +124,7 @@ impl Serialize for KmerMinHash {
         partial.serialize_field("md5sum", &format!("{:x}", md5_ctx.compute()))?;
 
         if let Some(abunds) = &self.abunds {
-            partial.serialize_field("abunds", abunds)?;
+            partial.serialize_field("abundances", abunds)?;
         }
 
         partial.serialize_field(
@@ -152,7 +152,7 @@ impl<'de> Deserialize<'de> for KmerMinHash {
             max_hash: u64,
             md5sum: String,
             mins: Vec<u64>,
-            abunds: Option<Vec<u64>>,
+            abundances: Option<Vec<u64>>,
             molecule: String,
         }
 
@@ -166,7 +166,7 @@ impl<'de> Deserialize<'de> for KmerMinHash {
             seed: tmpsig.seed,
             max_hash: tmpsig.max_hash,
             mins: tmpsig.mins,
-            abunds: tmpsig.abunds,
+            abunds: tmpsig.abundances,
             is_protein: match tmpsig.molecule.as_ref() {
                 "protein" => true,
                 "DNA" => false,
