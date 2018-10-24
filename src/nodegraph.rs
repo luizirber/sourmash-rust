@@ -60,7 +60,34 @@ impl Nodegraph {
     }
 
     // update
-    pub fn update(&mut self, other: &Nodegraph) {}
+    pub fn update(&mut self, other: &Nodegraph) {
+        /*
+        let mut bitsets = Vec::with_capacity(self.bs.len());
+        for (bs, bs_other) in self.bs.iter().zip(&other.bs) {
+            let mut new_bs = FixedBitSet::with_capacity(bs.len());
+            for bit in bs.union(&bs_other) {
+                new_bs.insert(bit);
+            }
+            bitsets.push(new_bs);
+        }
+        self.bs = bitsets;
+        */
+
+        let mut new_bins = 0;
+        for (bs, bs_other) in self.bs.iter_mut().zip(&other.bs) {
+            bs_other
+                .ones()
+                .map(|x| {
+                    if !bs.put(x) {
+                        new_bins += 1;
+                    }
+                })
+                .count();
+        }
+        // TODO: occupied bins seems to be broken in khmer? I don't get the same
+        // values...
+        //self.occupied_bins += new_bins;
+    }
 
     // save
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
@@ -219,6 +246,30 @@ mod test {
         {
             assert_eq!(c1, c2);
         }
+    }
+
+    #[test]
+    fn update_nodegraph() {
+        let mut filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        filename.push("tests/data/internal.0");
+
+        let ng_parent: Nodegraph = Nodegraph::from_path(filename).expect("Loading error");
+
+        filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        filename.push("tests/data/internal.1");
+
+        let ng_1: Nodegraph = Nodegraph::from_path(filename).expect("Loading error");
+
+        filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        filename.push("tests/data/internal.2");
+
+        let ng_2: Nodegraph = Nodegraph::from_path(filename).expect("Loading error");
+
+        let mut ng_0: Nodegraph = Nodegraph::new(&[99991, 99989, 99971, 99961], 1);
+        ng_0.update(&ng_1);
+        ng_0.update(&ng_2);
+        assert_eq!(ng_0.bs, ng_parent.bs);
+        //assert_eq!(ng_0.occupied_bins, ng_parent.occupied_bins);
     }
 
     #[test]
