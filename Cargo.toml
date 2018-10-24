@@ -26,7 +26,7 @@ backtrace = "0.3.4"
 error-chain = "0.12"
 finch = { version = "0.1.6", optional = true }
 lazy_static = "1.0.0"
-md5 = "0.3.7"
+md5 = "0.5.0"
 murmurhash3 = "~0.0.5"
 needletail = { version = "~0.2.1", optional = true }
 ordslice = "0.3.0"
