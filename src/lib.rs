@@ -19,6 +19,10 @@ extern crate error_chain;
 #[macro_use]
 extern crate lazy_static;
 
+#[cfg(test)]
+#[macro_use]
+extern crate proptest;
+
 #[macro_use]
 pub mod errors;
 

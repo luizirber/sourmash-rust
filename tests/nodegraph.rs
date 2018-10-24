@@ -1,12 +1,43 @@
-#[macro_use]
-extern crate proptest;
 extern crate sourmash;
 
 use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
 
-use proptest::num::u64;
 use sourmash::nodegraph::Nodegraph;
+
+#[test]
+fn count_and_get_nodegraph() {
+    let mut ng: Nodegraph = Nodegraph::new(&[10], 3);
+
+    ng.count(801084876663808);
+
+    assert_eq!(ng.get(801084876663808), 1);
+    assert_eq!(ng.unique_kmers(), 1);
+}
+
+#[test]
+fn load_save_nodegraph() {
+    let data: &[u8] = include_bytes!("data/internal.0");
+    let mut reader = BufReader::new(data);
+
+    let ng: Nodegraph = Nodegraph::from_reader(&mut reader).expect("Loading error");
+
+    let mut buf = Vec::new();
+    {
+        let mut writer = BufWriter::new(&mut buf);
+        ng.save_to_writer(&mut writer);
+    }
+
+    let chunk_size = 8;
+    for (i, (c1, c2)) in data
+        .to_vec()
+        .chunks(chunk_size)
+        .zip(buf.chunks(chunk_size))
+        .enumerate()
+    {
+        assert_eq!(c1, c2);
+    }
+}
 
 #[test]
 fn load_nodegraph() {
@@ -525,49 +556,5 @@ fn load_nodegraph() {
     .iter()
     {
         assert_eq!(ng.get(*h), 1);
-    }
-}
-
-#[test]
-fn count_and_get_nodegraph() {
-    let mut ng: Nodegraph = Nodegraph::new(&[10], 3);
-
-    ng.count(801084876663808);
-
-    assert_eq!(ng.get(801084876663808), 1);
-    assert_eq!(ng.unique_kmers(), 1);
-}
-
-proptest!{
-  #[test]
-  fn count_and_get(hash in u64::ANY) {
-      let mut ng: Nodegraph = Nodegraph::new(&[10], 3);
-      ng.count(hash);
-      assert_eq!(ng.get(hash), 1);
-  }
-}
-
-#[test]
-fn load_save_nodegraph() {
-    let data: &[u8] = include_bytes!("data/internal.0");
-    let mut reader = BufReader::new(data);
-
-    let ng: Nodegraph = Nodegraph::from_reader(&mut reader).expect("Loading error");
-
-    let mut buf = Vec::new();
-    {
-        let mut writer = BufWriter::new(&mut buf);
-        ng.save_to_writer(&mut writer);
-    }
-
-    let chunk_size = 8;
-    for (i, (c1, c2)) in data
-        .to_vec()
-        .chunks(chunk_size)
-        .zip(buf.chunks(chunk_size))
-        .enumerate()
-    {
-        println!("{}", i * chunk_size * 8);
-        assert_eq!(c1, c2);
     }
 }

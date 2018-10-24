@@ -80,11 +80,24 @@ impl Nodegraph {
         wtr.write_u64::<LittleEndian>(self.occupied_bins as u64)?; // n_occupied
         for count in &self.bs {
             wtr.write_u64::<LittleEndian>(count.len() as u64)?;
-            count
-                .as_slice()
-                .iter()
-                .map(|x| wtr.write_u32::<LittleEndian>(*x))
-                .count();
+            for (i, chunk) in count.as_slice().iter().enumerate() {
+                let next = (i + 1) * 32;
+                if next <= count.len() {
+                    wtr.write_u32::<LittleEndian>(*chunk).unwrap()
+                } else {
+                    let rem = count.len() - (i * 32);
+                    let remainder = if rem % 8 != 0 { rem / 8 + 1 } else { rem / 8 };
+
+                    if remainder == 0 {
+                        wtr.write_u8(0).unwrap()
+                    } else {
+                        for pos in 0..remainder {
+                            let byte: u8 = (chunk.wrapping_shr(pos as u32 * 8) & 0xff) as u8;
+                            wtr.write_u8(byte).unwrap()
+                        }
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -154,5 +167,20 @@ impl Nodegraph {
 
     pub fn unique_kmers(&self) -> usize {
         self.unique_kmers
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use proptest::num::u64;
+
+    proptest!{
+      #[test]
+      fn count_and_get(hash in u64::ANY) {
+          let mut ng: Nodegraph = Nodegraph::new(&[10], 3);
+          ng.count(hash);
+          assert_eq!(ng.get(hash), 1);
+      }
     }
 }
