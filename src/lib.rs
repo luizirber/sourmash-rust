@@ -1,7 +1,6 @@
 extern crate backtrace;
 extern crate md5;
 extern crate murmurhash3;
-extern crate ordslice;
 
 #[macro_use]
 extern crate serde_derive;
@@ -39,7 +38,6 @@ use std::iter::FromIterator;
 use std::str;
 
 use murmurhash3::murmurhash3_x64_128;
-use ordslice::Ext;
 
 use errors::{ErrorKind, Result};
 
@@ -247,7 +245,10 @@ impl KmerMinHash {
             {
                 // "good" hash - within range, smaller than current entry, or
                 // still have space available
-                let pos = self.mins.lower_bound(&hash);
+                let pos = match self.mins.binary_search(&hash) {
+                  Ok(p) => p,
+                  Err(p) => p
+                };
 
                 if pos == self.mins.len() {
                     // at end - must still be growing, we know the list won't
