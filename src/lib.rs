@@ -1,4 +1,6 @@
 extern crate backtrace;
+extern crate byteorder;
+extern crate fixedbitset;
 extern crate md5;
 extern crate murmurhash3;
 
@@ -16,6 +18,10 @@ extern crate error_chain;
 #[macro_use]
 extern crate lazy_static;
 
+#[cfg(test)]
+#[macro_use]
+extern crate proptest;
+
 #[macro_use]
 pub mod errors;
 
@@ -24,6 +30,9 @@ pub mod utils;
 
 #[macro_use]
 pub mod ffi;
+
+#[macro_use]
+pub mod nodegraph;
 
 #[cfg(feature = "from-finch")]
 pub mod from;
@@ -304,7 +313,8 @@ impl KmerMinHash {
                     } else if !force {
                         return Err(ErrorKind::InvalidDNA(
                             String::from_utf8(kmer.to_vec()).unwrap(),
-                        ).into());
+                        )
+                        .into());
                     }
                 }
             } else {

@@ -23,8 +23,10 @@ cbindgen = "0.6.1"
 
 [dependencies]
 backtrace = "0.3.4"
+byteorder = "^1.2"
 error-chain = "0.12"
 finch = { version = "0.1.6", optional = true }
+fixedbitset = "^0.1.9"
 lazy_static = "1.0.0"
 md5 = "0.5.0"
 murmurhash3 = "~0.0.5"
@@ -32,3 +34,6 @@ needletail = { version = "~0.2.1", optional = true }
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0.2"
+
+[dev-dependencies]
+proptest = "^0.8"
