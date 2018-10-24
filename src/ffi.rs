@@ -561,16 +561,14 @@ unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool,
       }).collect::<Vec<Signature>>()
     });
 
-    let filtered_sigs = flat_sigs.into_iter()
+    let filtered_sigs = flat_sigs
        .filter_map(|mut sig| {
          let good_mhs: Vec<KmerMinHash> = sig.signatures.into_iter().filter_map(|mh| {
            if ksize == 0 || ksize == mh.ksize as usize {
              match moltype {
-              Some(x) => {if x.to_str() == Ok("DNA") && mh.is_protein == false {
+              Some(x) => if (x.to_str() == Ok("DNA") && !mh.is_protein) || (x.to_str() == Ok("protein") && mh.is_protein) {
                   return Some(mh)
-                } else if x.to_str() == Ok("protein") && mh.is_protein {
-                  return Some(mh)
-                }},
+                },
               None => {
                  return Some(mh)
               }
@@ -588,7 +586,7 @@ unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool,
        });
 
 
-    let ptr_sigs: Vec<*mut Signature> = filtered_sigs.into_iter().map(|x| {
+    let ptr_sigs: Vec<*mut Signature> = filtered_sigs.map(|x| {
       Box::into_raw(Box::new(x)) as *mut Signature
     }).collect();
 

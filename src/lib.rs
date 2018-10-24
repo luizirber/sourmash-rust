@@ -16,6 +16,9 @@ extern crate serde_json;
 extern crate finch;
 
 #[macro_use]
+extern crate derive_builder;
+
+#[macro_use]
 extern crate lazy_static;
 
 #[cfg(test)]
@@ -32,7 +35,7 @@ pub mod utils;
 pub mod ffi;
 
 #[macro_use]
-pub mod nodegraph;
+pub mod index;
 
 #[cfg(feature = "from-finch")]
 pub mod from;
@@ -218,7 +221,7 @@ impl KmerMinHash {
         }
     }
 
-    pub fn check_compatible(&mut self, other: &KmerMinHash) -> Result<bool, Error> {
+    pub fn check_compatible(&self, other: &KmerMinHash) -> Result<bool, Error> {
         if self.ksize != other.ksize {
             return Err(SourmashError::MismatchKSizes.into());
         }
@@ -506,7 +509,7 @@ impl KmerMinHash {
         Ok((common, combined_mh.mins.len() as u64))
     }
 
-    pub fn intersection_size(&mut self, other: &KmerMinHash) -> Result<(u64, u64), Error> {
+    pub fn intersection_size(&self, other: &KmerMinHash) -> Result<(u64, u64), Error> {
         self.check_compatible(other)?;
 
         let mut combined_mh = KmerMinHash::new(
@@ -533,13 +536,17 @@ impl KmerMinHash {
         Ok((i2.into_iter().count() as u64, combined_mh.mins.len() as u64))
     }
 
-    pub fn compare(&mut self, other: &KmerMinHash) -> Result<f64, Error> {
+    pub fn compare(&self, other: &KmerMinHash) -> Result<f64, Error> {
         self.check_compatible(other)?;
         if let Ok((common, size)) = self.intersection_size(other) {
             return Ok(common as f64 / u64::max(1, size) as f64);
         } else {
             return Ok(0.0);
         }
+    }
+
+    pub fn size(&self) -> usize {
+        self.mins.len()
     }
 }
 

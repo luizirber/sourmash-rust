@@ -1,5 +1,7 @@
 all: test
 
+bench:
+	cargo bench
 test:
 	cargo test
 

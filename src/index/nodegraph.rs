@@ -45,7 +45,7 @@ impl Nodegraph {
         if is_new_kmer {
             self.unique_kmers += 1
         }
-        return is_new_kmer;
+        is_new_kmer
     }
 
     pub fn get(&self, hash: HashIntoType) -> usize {
@@ -55,7 +55,7 @@ impl Nodegraph {
                 return 0;
             }
         }
-        return 1;
+        1
     }
 
     // update
@@ -97,7 +97,7 @@ impl Nodegraph {
     where
         W: io::Write,
     {
-        wtr.write(b"OXLI")?;
+        wtr.write_all(b"OXLI")?;
         wtr.write_u8(4)?; // version
         wtr.write_u8(2)?; // ht_type
         wtr.write_u32::<LittleEndian>(self.ksize as u32)?; // ksize
@@ -132,7 +132,7 @@ impl Nodegraph {
         R: io::Read,
     {
         let signature = rdr.read_u32::<BigEndian>()?;
-        assert_eq!(signature, 0x4f584c49);
+        assert_eq!(signature, 0x4f58_4c49);
 
         let version = rdr.read_u8()?;
         assert_eq!(version, 0x04);
@@ -178,7 +178,8 @@ impl Nodegraph {
     }
 
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Nodegraph, Error> {
-        Ok(Nodegraph::from_reader(&mut File::open(path)?)?)
+        let mut reader = io::BufReader::new(File::open(path)?);
+        Ok(Nodegraph::from_reader(&mut reader)?)
     }
 
     pub fn tablesizes(&self) -> Vec<usize> {
@@ -192,6 +193,33 @@ impl Nodegraph {
 
     pub fn unique_kmers(&self) -> usize {
         self.unique_kmers
+    }
+
+    pub fn similarity(&self, other: &Nodegraph) -> f64 {
+        let result: usize = self
+            .bs
+            .iter()
+            .zip(&other.bs)
+            .map(|(bs, bs_other)| bs.intersection(bs_other).count())
+            .sum();
+        let size: usize = self
+            .bs
+            .iter()
+            .zip(&other.bs)
+            .map(|(bs, bs_other)| bs.union(bs_other).count())
+            .sum();
+        result as f64 / size as f64
+    }
+
+    pub fn containment(&self, other: &Nodegraph) -> f64 {
+        let result: usize = self
+            .bs
+            .iter()
+            .zip(&other.bs)
+            .map(|(bs, bs_other)| bs.intersection(bs_other).count())
+            .sum();
+        let size: usize = self.bs.iter().map(|bs| bs.len()).sum();
+        result as f64 / size as f64
     }
 }
 
@@ -224,7 +252,7 @@ mod test {
 
     #[test]
     fn load_save_nodegraph() {
-        let data: &[u8] = include_bytes!("../tests/data/internal.0");
+        let data: &[u8] = include_bytes!("../../tests/data/internal.0");
         let mut reader = BufReader::new(data);
 
         let ng: Nodegraph = Nodegraph::from_reader(&mut reader).expect("Loading error");
