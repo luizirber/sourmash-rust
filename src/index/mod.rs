@@ -17,6 +17,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use failure::Error;
+use lazy_init::Lazy;
 
 use index::storage::{ReadData, Storage};
 use Signature;
@@ -67,16 +68,25 @@ pub struct LeafInfo {
 }
 
 #[derive(Builder, Default, Clone)]
-pub struct Leaf {
+pub struct Leaf<T>
+where
+    T: std::marker::Sync,
+{
     pub(crate) filename: String,
     pub(crate) name: String,
     pub(crate) metadata: String,
 
     #[builder(setter(skip))]
     pub(crate) storage: Option<Rc<Storage>>,
+
+    #[builder(setter(skip))]
+    pub(crate) data: Rc<Lazy<T>>,
 }
 
-impl std::fmt::Debug for Leaf {
+impl<T> std::fmt::Debug for Leaf<T>
+where
+    T: std::marker::Sync,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
@@ -86,21 +96,47 @@ impl std::fmt::Debug for Leaf {
     }
 }
 
-impl<S: Storage + ?Sized> ReadData<Signature, S> for Leaf {
-    fn data(&self, storage: &S) -> Result<Signature, Error> {
-        // TODO: cache this call!
-        let raw = storage.load(&self.filename)?;
-        let sigs: Vec<Signature> = serde_json::from_reader(&mut &raw[..])?;
-        // TODO: select the right sig?
-        Ok(sigs[0].clone())
+impl<S: Storage + ?Sized> ReadData<Signature, S> for Leaf<Signature> {
+    fn data(&self, storage: &S) -> Result<&Signature, Error> {
+        let sig = self.data.get_or_create(|| {
+            let raw = storage.load(&self.filename).unwrap();
+            let sigs: Vec<Signature> = serde_json::from_reader(&mut &raw[..]).unwrap();
+            // TODO: select the right sig?
+            sigs[0].to_owned()
+        });
+
+        Ok(sig)
     }
 }
 
-impl Comparable<Leaf> for Leaf {
-    fn similarity(&self, other: &Leaf) -> f64 {
+impl Leaf<Signature> {
+    pub fn count_common(&self, other: &Leaf<Signature>) -> u64 {
         if let Some(storage) = &self.storage {
-            let ng: Signature = self.data(&**storage).unwrap();
-            let ong: Signature = other.data(&**storage).unwrap();
+            let ng: &Signature = self.data(&**storage).unwrap();
+            let ong: &Signature = other.data(&**storage).unwrap();
+
+            // TODO: select the right signatures...
+            ng.signatures[0].count_common(&ong.signatures[0]).unwrap() as u64
+        } else {
+            0
+        }
+    }
+
+    pub fn mins(&self) -> Vec<u64> {
+        if let Some(storage) = &self.storage {
+            let ng: &Signature = self.data(&**storage).unwrap();
+            ng.signatures[0].mins.iter().cloned().collect()
+        } else {
+            Vec::new()
+        }
+    }
+}
+
+impl Comparable<Leaf<Signature>> for Leaf<Signature> {
+    fn similarity(&self, other: &Leaf<Signature>) -> f64 {
+        if let Some(storage) = &self.storage {
+            let ng: &Signature = self.data(&**storage).unwrap();
+            let ong: &Signature = other.data(&**storage).unwrap();
 
             // TODO: select the right signatures...
             ng.signatures[0].compare(&ong.signatures[0]).unwrap()
@@ -111,10 +147,10 @@ impl Comparable<Leaf> for Leaf {
         }
     }
 
-    fn containment(&self, other: &Leaf) -> f64 {
+    fn containment(&self, other: &Leaf<Signature>) -> f64 {
         if let Some(storage) = &self.storage {
-            let mut ng: Signature = self.data(&**storage).unwrap();
-            let ong: Signature = other.data(&**storage).unwrap();
+            let ng: &Signature = self.data(&**storage).unwrap();
+            let ong: &Signature = other.data(&**storage).unwrap();
 
             // TODO: select the right signatures...
             let common = ng.signatures[0].count_common(&ong.signatures[0]).unwrap();

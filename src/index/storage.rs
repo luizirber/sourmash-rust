@@ -7,7 +7,7 @@ use failure::Error;
 
 /// Implemented by anything that wants to read specific data from a storage.
 pub trait ReadData<D, S: Storage + ?Sized> {
-    fn data(&self, storage: &S) -> Result<D, Error>;
+    fn data(&self, storage: &S) -> Result<&D, Error>;
 }
 
 #[derive(Deserialize)]

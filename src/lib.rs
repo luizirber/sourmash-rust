@@ -1,4 +1,3 @@
-extern crate backtrace;
 extern crate byteorder;
 extern crate failure;
 #[macro_use]
@@ -20,6 +19,9 @@ extern crate derive_builder;
 
 #[macro_use]
 extern crate lazy_static;
+
+#[macro_use]
+extern crate lazy_init;
 
 #[cfg(test)]
 #[macro_use]
@@ -43,10 +45,9 @@ pub mod from;
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::hash::{BuildHasherDefault, Hasher};
-use std::iter::FromIterator;
+use std::iter::{Iterator, Peekable};
 use std::str;
 
 use errors::SourmashError;
@@ -55,31 +56,6 @@ use murmurhash3::murmurhash3_x64_128;
 
 pub fn _hash_murmur(kmer: &[u8], seed: u64) -> u64 {
     murmurhash3_x64_128(kmer, seed).0
-}
-
-// This comes from finch
-pub struct NoHashHasher(u64);
-
-impl Default for NoHashHasher {
-    #[inline]
-    fn default() -> NoHashHasher {
-        NoHashHasher(0x0)
-    }
-}
-
-impl Hasher for NoHashHasher {
-    #[inline]
-    fn write(&mut self, bytes: &[u8]) {
-        *self = NoHashHasher(
-            (u64::from(bytes[0]) << 24)
-                + (u64::from(bytes[1]) << 16)
-                + (u64::from(bytes[2]) << 8)
-                + u64::from(bytes[3]),
-        );
-    }
-    fn finish(&self) -> u64 {
-        self.0
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -472,16 +448,17 @@ impl KmerMinHash {
         Ok(())
     }
 
-    pub fn count_common(&mut self, other: &KmerMinHash) -> Result<u64, Error> {
+    pub fn count_common(&self, other: &KmerMinHash) -> Result<u64, Error> {
         self.check_compatible(other)?;
-        let s1: HashSet<&u64, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<&u64, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(other.mins.iter());
-        Ok(s1.intersection(&s2).count() as u64)
+        let iter = Intersection {
+            left: self.mins.iter().peekable(),
+            right: other.mins.iter().peekable(),
+        };
+
+        Ok(iter.count() as u64)
     }
 
-    pub fn intersection(&mut self, other: &KmerMinHash) -> Result<(Vec<u64>, u64), Error> {
+    pub fn intersection(&self, other: &KmerMinHash) -> Result<(Vec<u64>, u64), Error> {
         self.check_compatible(other)?;
 
         let mut combined_mh = KmerMinHash::new(
@@ -496,16 +473,20 @@ impl KmerMinHash {
         combined_mh.merge(&self)?;
         combined_mh.merge(&other)?;
 
-        let s1: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(other.mins.iter());
-        let s3: HashSet<_, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(combined_mh.mins.iter());
+        let it1 = Intersection {
+            left: self.mins.iter().peekable(),
+            right: other.mins.iter().peekable(),
+        };
 
-        let i1 = &s1 & &s2;
-        let i2 = &i1 & &s3;
+        // TODO: there is probably a way to avoid this Vec here,
+        // and pass the it1 as left in it2.
+        let i1: Vec<u64> = it1.into_iter().cloned().collect();
+        let it2 = Intersection {
+            left: i1.iter().peekable(),
+            right: combined_mh.mins.iter().peekable(),
+        };
 
-        let common: Vec<u64> = i2.into_iter().cloned().collect();
+        let common: Vec<u64> = it2.into_iter().cloned().collect();
         Ok((common, combined_mh.mins.len() as u64))
     }
 
@@ -524,16 +505,20 @@ impl KmerMinHash {
         combined_mh.merge(&self)?;
         combined_mh.merge(&other)?;
 
-        let s1: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(other.mins.iter());
-        let s3: HashSet<_, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(combined_mh.mins.iter());
+        let it1 = Intersection {
+            left: self.mins.iter().peekable(),
+            right: other.mins.iter().peekable(),
+        };
 
-        let i1 = &s1 & &s2;
-        let i2 = &i1 & &s3;
+        // TODO: there is probably a way to avoid this Vec here,
+        // and pass the it1 as left in it2.
+        let i1: Vec<u64> = it1.into_iter().cloned().collect();
+        let it2 = Intersection {
+            left: i1.iter().peekable(),
+            right: combined_mh.mins.iter().peekable(),
+        };
 
-        Ok((i2.into_iter().count() as u64, combined_mh.mins.len() as u64))
+        Ok((it2.count() as u64, combined_mh.mins.len() as u64))
     }
 
     pub fn compare(&self, other: &KmerMinHash) -> Result<f64, Error> {
@@ -547,6 +532,37 @@ impl KmerMinHash {
 
     pub fn size(&self) -> usize {
         self.mins.len()
+    }
+}
+
+struct Intersection<T, I: Iterator<Item = T>> {
+    left: Peekable<I>,
+    right: Peekable<I>,
+}
+
+impl<T: Ord, I: Iterator<Item = T>> Iterator for Intersection<T, I> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        loop {
+            let res = match (self.left.peek(), self.right.peek()) {
+                (Some(ref left_key), Some(ref right_key)) => left_key.cmp(right_key),
+                _ => return None,
+            };
+
+            match res {
+                Ordering::Less => {
+                    self.left.next();
+                }
+                Ordering::Greater => {
+                    self.right.next();
+                }
+                Ordering::Equal => {
+                    self.right.next();
+                    return self.left.next();
+                }
+            }
+        }
     }
 }
 

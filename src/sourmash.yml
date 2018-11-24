@@ -1,0 +1,17 @@
+name: smrs
+version: "2.0.0"
+about: "tools for comparing DNA sequences with MinHash sketches"
+author: Luiz Irber <sourmash@luizirber.org>
+
+settings:
+    - SubcommandRequiredElseHelp
+
+subcommands:
+    - scaffold:
+        about: create SBT scaffold
+        settings:
+            - ArgRequiredElseHelp
+        args:
+            - current_sbt:
+                help: SBT (for reading leaves)
+                index: 1

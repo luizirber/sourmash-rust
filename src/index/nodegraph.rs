@@ -8,8 +8,8 @@ use fixedbitset::FixedBitSet;
 
 type HashIntoType = u64;
 
-#[derive(Debug)]
-pub(crate) struct Nodegraph {
+#[derive(Debug, Default, Clone)]
+pub struct Nodegraph {
     bs: Vec<FixedBitSet>,
     ksize: usize,
     occupied_bins: usize,
