@@ -8,13 +8,11 @@ use std::slice;
 use std::str;
 use std::thread;
 
-use backtrace::Backtrace;
-
-use errors::{Error, ErrorKind, Result, SourmashErrorCode};
+use errors::SourmashErrorCode;
+use failure::Error;
 
 thread_local! {
     pub static LAST_ERROR: RefCell<Option<Error>> = RefCell::new(None);
-    pub static LAST_BACKTRACE: RefCell<Option<(Option<String>, Backtrace)>> = RefCell::new(None);
 }
 
 macro_rules! ffi_fn (
@@ -46,16 +44,10 @@ macro_rules! ffi_fn (
     }
 );
 
-fn notify_err(err: Error) {
-    if let Some(backtrace) = err.backtrace() {
-        LAST_BACKTRACE.with(|e| {
-            *e.borrow_mut() = Some((None, backtrace.clone()));
-        });
-    }
-    LAST_ERROR.with(|e| {
-        *e.borrow_mut() = Some(err);
-    });
-}
+/// An error thrown by `landingpad` in place of panics.
+#[derive(Fail, Debug)]
+#[fail(display = "sourmash panicked: {}", _0)]
+pub struct Panic(String);
 
 /// Returns the last error message.
 ///
@@ -63,15 +55,12 @@ fn notify_err(err: Error) {
 /// that needs to be freed with `sourmash_str_free`.
 #[no_mangle]
 pub unsafe extern "C" fn sourmash_err_get_last_message() -> SourmashStr {
-    use std::error::Error;
     use std::fmt::Write;
     LAST_ERROR.with(|e| {
         if let Some(ref err) = *e.borrow() {
             let mut msg = err.to_string();
-            let mut cause = err.cause();
-            while let Some(the_cause) = cause {
-                write!(&mut msg, "\n  caused by: {}", the_cause).ok();
-                cause = the_cause.cause();
+            for cause in err.iter_causes() {
+                write!(&mut msg, "\n  caused by: {}", cause).ok();
             }
             SourmashStr::from_string(msg)
         } else {
@@ -83,52 +72,17 @@ pub unsafe extern "C" fn sourmash_err_get_last_message() -> SourmashStr {
 /// Returns the panic information as string.
 #[no_mangle]
 pub unsafe extern "C" fn sourmash_err_get_backtrace() -> SourmashStr {
-    LAST_BACKTRACE.with(|e| {
-        if let Some((ref info, ref backtrace)) = *e.borrow() {
-            use std::fmt::Write;
-            let mut out = String::new();
-            if let &Some(ref info) = info {
-                write!(&mut out, "{}\n", info).ok();
+    LAST_ERROR.with(|e| {
+        if let Some(ref error) = *e.borrow() {
+            let backtrace = error.backtrace().to_string();
+            if !backtrace.is_empty() {
+                use std::fmt::Write;
+                let mut out = String::new();
+                write!(&mut out, "stacktrace: {}", backtrace).ok();
+                SourmashStr::from_string(out)
+            } else {
+                Default::default()
             }
-            write!(&mut out, "stacktrace:").ok();
-            let frames = backtrace.frames();
-            if frames.len() > 5 {
-                let mut done = false;
-                for frame in frames[6..].iter() {
-                    if done {
-                        break;
-                    }
-
-                    let ip = frame.ip();
-                    let symbols = frame.symbols();
-                    for symbol in symbols.iter() {
-                        write!(&mut out, "\n{:18?} ", ip).ok();
-
-                        if let Some(name) = symbol.name() {
-                            write!(&mut out, "{}", name).ok();
-                            // hack hack hack: make smaller stacktraces in case we are
-                            // a python binding.
-                            if name.as_bytes() == b"ffi_call" {
-                                done = true;
-                            }
-                        } else {
-                            write!(&mut out, "<unknown>").ok();
-                        }
-
-                        if let Some(file) = symbol.filename() {
-                            if let Some(filename) = file.file_name() {
-                                write!(
-                                    &mut out,
-                                    " ({}:{})",
-                                    filename.to_string_lossy(),
-                                    symbol.lineno().unwrap_or(0)
-                                ).ok();
-                            }
-                        }
-                    }
-                }
-            }
-            SourmashStr::from_string(out)
         } else {
             Default::default()
         }
@@ -139,9 +93,6 @@ pub unsafe extern "C" fn sourmash_err_get_backtrace() -> SourmashStr {
 #[no_mangle]
 pub unsafe extern "C" fn sourmash_err_clear() {
     LAST_ERROR.with(|e| {
-        *e.borrow_mut() = None;
-    });
-    LAST_BACKTRACE.with(|e| {
         *e.borrow_mut() = None;
     });
 }
@@ -159,20 +110,25 @@ pub unsafe extern "C" fn sourmash_init() {
 pub unsafe extern "C" fn sourmash_err_get_last_code() -> SourmashErrorCode {
     LAST_ERROR.with(|e| {
         if let Some(ref err) = *e.borrow() {
-            SourmashErrorCode::from_kind(err.kind())
+            SourmashErrorCode::from_error(err)
         } else {
             SourmashErrorCode::NoError
         }
     })
 }
 
+fn set_last_error(err: Error) {
+    LAST_ERROR.with(|e| {
+        *e.borrow_mut() = Some(err);
+    });
+}
+
 pub unsafe fn set_panic_hook() {
     panic::set_hook(Box::new(|info| {
-        let backtrace = Backtrace::new();
         let thread = thread::current();
         let thread = thread.name().unwrap_or("unnamed");
 
-        let msg = match info.payload().downcast_ref::<&str>() {
+        let message = match info.payload().downcast_ref::<&str>() {
             Some(s) => *s,
             None => match info.payload().downcast_ref::<String>() {
                 Some(s) => &**s,
@@ -180,39 +136,32 @@ pub unsafe fn set_panic_hook() {
             },
         };
 
-        let panic_info = match info.location() {
+        let description = match info.location() {
             Some(location) => format!(
                 "thread '{}' panicked with '{}' at {}:{}",
                 thread,
-                msg,
+                message,
                 location.file(),
                 location.line()
             ),
-            None => format!("thread '{}' panicked with '{}'", thread, msg),
+            None => format!("thread '{}' panicked with '{}'", thread, message),
         };
 
-        LAST_BACKTRACE.with(|e| {
-            *e.borrow_mut() = Some((Some(panic_info), backtrace));
-        });
+        set_last_error(Panic(description).into())
     }));
 }
 
-pub unsafe fn landingpad<F: FnOnce() -> Result<T> + panic::UnwindSafe, T>(f: F) -> T {
+pub unsafe fn landingpad<F, T>(f: F) -> T
+where
+    F: FnOnce() -> Result<T, Error> + panic::UnwindSafe,
+{
     match panic::catch_unwind(f) {
-        Ok(rv) => rv.map_err(|err| notify_err(err)).unwrap_or(mem::zeroed()),
-        Err(err) => {
-            use std::any::Any;
-            let err = &*err as &Any;
-            let msg = match err.downcast_ref::<&str>() {
-                Some(s) => *s,
-                None => match err.downcast_ref::<String>() {
-                    Some(s) => &**s,
-                    None => "Box<Any>",
-                },
-            };
-            notify_err(ErrorKind::Panic(msg.to_string()).into());
+        Ok(Ok(result)) => result,
+        Ok(Err(err)) => {
+            set_last_error(err);
             mem::zeroed()
         }
+        Err(_) => mem::zeroed(),
     }
 }
 

@@ -1,5 +1,8 @@
 extern crate backtrace;
 extern crate byteorder;
+extern crate failure;
+#[macro_use]
+extern crate failure_derive;
 extern crate fixedbitset;
 extern crate md5;
 extern crate murmurhash3;
@@ -43,9 +46,9 @@ use std::hash::{BuildHasherDefault, Hasher};
 use std::iter::FromIterator;
 use std::str;
 
+use errors::SourmashError;
+use failure::Error;
 use murmurhash3::murmurhash3_x64_128;
-
-use errors::{ErrorKind, Result};
 
 pub fn _hash_murmur(kmer: &[u8], seed: u64) -> u64 {
     murmurhash3_x64_128(kmer, seed).0
@@ -102,7 +105,7 @@ impl Default for KmerMinHash {
 }
 
 impl Serialize for KmerMinHash {
-    fn serialize<S>(&self, serializer: S) -> ::std::result::Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -144,7 +147,7 @@ impl Serialize for KmerMinHash {
 }
 
 impl<'de> Deserialize<'de> for KmerMinHash {
-    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -215,18 +218,18 @@ impl KmerMinHash {
         }
     }
 
-    pub fn check_compatible(&mut self, other: &KmerMinHash) -> Result<bool> {
+    pub fn check_compatible(&mut self, other: &KmerMinHash) -> Result<bool, Error> {
         if self.ksize != other.ksize {
-            return Err(ErrorKind::MismatchKSizes.into());
+            return Err(SourmashError::MismatchKSizes.into());
         }
         if self.is_protein != other.is_protein {
-            return Err(ErrorKind::MismatchDNAProt.into());
+            return Err(SourmashError::MismatchDNAProt.into());
         }
         if self.max_hash != other.max_hash {
-            return Err(ErrorKind::MismatchMaxHash.into());
+            return Err(SourmashError::MismatchMaxHash.into());
         }
         if self.seed != other.seed {
-            return Err(ErrorKind::MismatchSeed.into());
+            return Err(SourmashError::MismatchSeed.into());
         }
         Ok(true)
     }
@@ -291,7 +294,7 @@ impl KmerMinHash {
         self.add_hash(hash);
     }
 
-    pub fn add_sequence(&mut self, seq: &[u8], force: bool) -> Result<()> {
+    pub fn add_sequence(&mut self, seq: &[u8], force: bool) -> Result<(), Error> {
         let sequence: Vec<u8> = seq
             .iter()
             .map(|&x| (x as char).to_ascii_uppercase() as u8)
@@ -308,9 +311,9 @@ impl KmerMinHash {
                             self.add_word(&rc);
                         }
                     } else if !force {
-                        return Err(ErrorKind::InvalidDNA(
-                            String::from_utf8(kmer.to_vec()).unwrap(),
-                        ).into());
+                        return Err(SourmashError::InvalidDNA {
+                            message: String::from_utf8(kmer.to_vec()).unwrap(),
+                        }.into());
                     }
                 }
             } else {
@@ -345,7 +348,7 @@ impl KmerMinHash {
         Ok(())
     }
 
-    pub fn merge(&mut self, other: &KmerMinHash) -> Result<()> {
+    pub fn merge(&mut self, other: &KmerMinHash) -> Result<(), Error> {
         self.check_compatible(other)?;
         let max_size = self.mins.len() + other.mins.len();
         let mut merged: Vec<u64> = Vec::with_capacity(max_size);
@@ -443,21 +446,21 @@ impl KmerMinHash {
         Ok(())
     }
 
-    pub fn add_from(&mut self, other: &KmerMinHash) -> Result<()> {
+    pub fn add_from(&mut self, other: &KmerMinHash) -> Result<(), Error> {
         for min in &other.mins {
             self.add_hash(*min);
         }
         Ok(())
     }
 
-    pub fn add_many(&mut self, hashes: &[u64]) -> Result<()> {
+    pub fn add_many(&mut self, hashes: &[u64]) -> Result<(), Error> {
         for min in hashes {
             self.add_hash(*min);
         }
         Ok(())
     }
 
-    pub fn add_many_with_abund(&mut self, hashes: &[(u64, u64)]) -> Result<()> {
+    pub fn add_many_with_abund(&mut self, hashes: &[(u64, u64)]) -> Result<(), Error> {
         for item in hashes {
             for _i in 0..item.1 {
                 self.add_hash(item.0);
@@ -466,7 +469,7 @@ impl KmerMinHash {
         Ok(())
     }
 
-    pub fn count_common(&mut self, other: &KmerMinHash) -> Result<u64> {
+    pub fn count_common(&mut self, other: &KmerMinHash) -> Result<u64, Error> {
         self.check_compatible(other)?;
         let s1: HashSet<&u64, BuildHasherDefault<NoHashHasher>> =
             HashSet::from_iter(self.mins.iter());
@@ -475,7 +478,7 @@ impl KmerMinHash {
         Ok(s1.intersection(&s2).count() as u64)
     }
 
-    pub fn intersection(&mut self, other: &KmerMinHash) -> Result<(Vec<u64>, u64)> {
+    pub fn intersection(&mut self, other: &KmerMinHash) -> Result<(Vec<u64>, u64), Error> {
         self.check_compatible(other)?;
 
         let mut combined_mh = KmerMinHash::new(
@@ -503,7 +506,7 @@ impl KmerMinHash {
         Ok((common, combined_mh.mins.len() as u64))
     }
 
-    pub fn intersection_size(&mut self, other: &KmerMinHash) -> Result<(u64, u64)> {
+    pub fn intersection_size(&mut self, other: &KmerMinHash) -> Result<(u64, u64), Error> {
         self.check_compatible(other)?;
 
         let mut combined_mh = KmerMinHash::new(
@@ -530,7 +533,7 @@ impl KmerMinHash {
         Ok((i2.into_iter().count() as u64, combined_mh.mins.len() as u64))
     }
 
-    pub fn compare(&mut self, other: &KmerMinHash) -> Result<f64> {
+    pub fn compare(&mut self, other: &KmerMinHash) -> Result<f64, Error> {
         self.check_compatible(other)?;
         if let Ok((common, size)) = self.intersection_size(other) {
             return Ok(common as f64 / u64::max(1, size) as f64);
