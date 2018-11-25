@@ -1,47 +1,31 @@
-use serde_json;
-use std::io;
-use std::str;
+use failure::Error;
 
-error_chain! {
-    errors {
-        /// Raised in some cases if panics are caught
-        Panic(message: String) {
-            description("panic")
-            display("panic: {}", message)
-        }
-        /// Raised for internal errors in the libraries.  Should not happen.
-        Internal(message: &'static str) {
-            description("internal error")
-            display("internal error: {}", message)
-        }
-        MismatchKSizes {
-            description("different ksizes cannot be compared")
-        }
-        MismatchDNAProt {
-            description("DNA/prot minhashes cannot be compared")
-        }
-        MismatchMaxHash {
-            description("mismatch in max_hash; comparison fail")
-        }
-        MismatchSeed {
-            description("mismatch in seed; comparison fail")
-        }
-        InvalidDNA(message: String) {
-            description("Invalid DNA character in input")
-            display("invalid DNA character in input k-mer: {}", message)
-        }
-        InvalidProt(message: String) {
-            description("Invalid protein character in input")
-            display("invalid protein character in input: {}", message)
-        }
-    }
+#[derive(Debug, Fail)]
+pub enum SourmashError {
+    /// Raised for internal errors in the libraries.  Should not happen.
+    #[fail(display = "internal error: {}", message)]
+    Internal { message: String },
 
-    foreign_links {
-        Io(io::Error);
-        Utf8Error(str::Utf8Error);
-        ParseInt(::std::num::ParseIntError);
-        SerdeError(serde_json::Error);
-    }
+    #[fail(display = "different ksizes cannot be compared")]
+    MismatchKSizes,
+
+    #[fail(display = "DNA/prot minhashes cannot be compared")]
+    MismatchDNAProt,
+
+    #[fail(display = "mismatch in max_hash; comparison fail")]
+    MismatchMaxHash,
+
+    #[fail(display = "mismatch in seed; comparison fail")]
+    MismatchSeed,
+
+    #[fail(
+        display = "invalid DNA character in input k-mer: {}",
+        message
+    )]
+    InvalidDNA { message: String },
+
+    #[fail(display = "invalid protein character in input: {}", message)]
+    InvalidProt { message: String },
 }
 
 #[repr(u32)]
@@ -69,22 +53,27 @@ pub enum SourmashErrorCode {
 }
 
 impl SourmashErrorCode {
-    pub fn from_kind(kind: &ErrorKind) -> SourmashErrorCode {
-        match *kind {
-            ErrorKind::Panic(..) => SourmashErrorCode::Panic,
-            ErrorKind::Msg(..) => SourmashErrorCode::Msg,
-            ErrorKind::Internal(..) => SourmashErrorCode::Internal,
-            ErrorKind::MismatchKSizes => SourmashErrorCode::MismatchKSizes,
-            ErrorKind::MismatchDNAProt => SourmashErrorCode::MismatchDNAProt,
-            ErrorKind::MismatchMaxHash => SourmashErrorCode::MismatchMaxHash,
-            ErrorKind::MismatchSeed => SourmashErrorCode::MismatchSeed,
-            ErrorKind::InvalidDNA(..) => SourmashErrorCode::InvalidDNA,
-            ErrorKind::InvalidProt(..) => SourmashErrorCode::InvalidProt,
-            ErrorKind::Io(..) => SourmashErrorCode::Io,
-            ErrorKind::Utf8Error(..) => SourmashErrorCode::Utf8Error,
-            ErrorKind::ParseInt(..) => SourmashErrorCode::ParseInt,
-            ErrorKind::SerdeError(..) => SourmashErrorCode::SerdeError,
-            ErrorKind::__Nonexhaustive { .. } => unreachable!(),
+    pub fn from_error(error: &Error) -> SourmashErrorCode {
+        for cause in error.iter_chain() {
+            use utils::Panic;
+            if let Some(_) = cause.downcast_ref::<Panic>() {
+                return SourmashErrorCode::Panic;
+            }
+
+            if let Some(err) = cause.downcast_ref::<SourmashError>() {
+                return match err {
+                    SourmashError::Internal { .. } => SourmashErrorCode::Internal,
+                    SourmashError::MismatchKSizes => SourmashErrorCode::MismatchKSizes,
+                    SourmashError::MismatchDNAProt => SourmashErrorCode::MismatchDNAProt,
+                    SourmashError::MismatchMaxHash => SourmashErrorCode::MismatchMaxHash,
+                    SourmashError::MismatchSeed => SourmashErrorCode::MismatchSeed,
+                    SourmashError::InvalidDNA { .. } => SourmashErrorCode::InvalidDNA,
+                    SourmashError::InvalidProt { .. } => SourmashErrorCode::InvalidProt,
+                };
+            }
+            /*
+             */
         }
+        SourmashErrorCode::Unknown
     }
 }

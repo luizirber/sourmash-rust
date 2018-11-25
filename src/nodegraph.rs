@@ -3,9 +3,8 @@ use std::io;
 use std::path::Path;
 
 use byteorder::{BigEndian, LittleEndian, ReadBytesExt, WriteBytesExt};
+use failure::Error;
 use fixedbitset::FixedBitSet;
-
-use errors::Result;
 
 type HashIntoType = u64;
 
@@ -81,8 +80,7 @@ impl Nodegraph {
                     if !bs.put(x) {
                         new_bins += 1;
                     }
-                })
-                .count();
+                }).count();
         }
         // TODO: occupied bins seems to be broken in khmer? I don't get the same
         // values...
@@ -90,12 +88,12 @@ impl Nodegraph {
     }
 
     // save
-    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+    pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), Error> {
         self.save_to_writer(&mut File::open(path)?)?;
         Ok(())
     }
 
-    pub fn save_to_writer<W>(&self, wtr: &mut W) -> Result<()>
+    pub fn save_to_writer<W>(&self, wtr: &mut W) -> Result<(), Error>
     where
         W: io::Write,
     {
@@ -129,7 +127,7 @@ impl Nodegraph {
         Ok(())
     }
 
-    pub fn from_reader<R>(rdr: &mut R) -> Result<Nodegraph>
+    pub fn from_reader<R>(rdr: &mut R) -> Result<Nodegraph, Error>
     where
         R: io::Read,
     {
@@ -179,7 +177,7 @@ impl Nodegraph {
         })
     }
 
-    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Nodegraph> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Nodegraph, Error> {
         Ok(Nodegraph::from_reader(&mut File::open(path)?)?)
     }
 
@@ -786,7 +784,7 @@ mod test {
             802340523858506,
             803596407436267,
         ]
-        .iter()
+            .iter()
         {
             assert_eq!(ng.get(*h), 1);
         }
