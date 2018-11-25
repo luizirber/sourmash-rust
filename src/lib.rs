@@ -13,9 +13,6 @@ extern crate serde_json;
 extern crate finch;
 
 #[macro_use]
-extern crate error_chain;
-
-#[macro_use]
 extern crate lazy_static;
 
 #[cfg(test)]
@@ -255,8 +252,8 @@ impl KmerMinHash {
                 // "good" hash - within range, smaller than current entry, or
                 // still have space available
                 let pos = match self.mins.binary_search(&hash) {
-                  Ok(p) => p,
-                  Err(p) => p
+                    Ok(p) => p,
+                    Err(p) => p,
                 };
 
                 if pos == self.mins.len() {
@@ -313,8 +310,7 @@ impl KmerMinHash {
                     } else if !force {
                         return Err(ErrorKind::InvalidDNA(
                             String::from_utf8(kmer.to_vec()).unwrap(),
-                        )
-                        .into());
+                        ).into());
                     }
                 }
             } else {

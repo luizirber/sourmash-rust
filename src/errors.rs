@@ -69,8 +69,9 @@ pub enum SourmashErrorCode {
 }
 
 impl SourmashErrorCode {
-    pub fn from_kind(kind: &ErrorKind) -> SourmashErrorCode {
-        match *kind {
+    pub fn from_error(error: &ErrorKind) -> SourmashErrorCode {
+      for cause in error.iter_chain() {
+        match  {
             ErrorKind::Panic(..) => SourmashErrorCode::Panic,
             ErrorKind::Msg(..) => SourmashErrorCode::Msg,
             ErrorKind::Internal(..) => SourmashErrorCode::Internal,
