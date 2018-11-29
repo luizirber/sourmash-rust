@@ -13,7 +13,7 @@ use sourmash::index::search::search_minhashes;
 use sourmash::index::{Index, Leaf};
 use sourmash::Signature;
 
-fn find_bench(c: &mut Criterion) {
+fn find_small_bench(c: &mut Criterion) {
     let mut filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     filename.push("tests/data/v5.sbt.json");
 
@@ -45,8 +45,43 @@ fn find_bench(c: &mut Criterion) {
     );
 
     let functions = vec![sbt_find, linear_find];
-    c.bench_functions("find", functions, leaf);
+    c.bench_functions("find_small", functions, leaf);
 }
 
-criterion_group!(benches, find_bench);
+fn find_subset_bench(c: &mut Criterion) {
+    let mut filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    filename.push("tests/data/subset.sbt.json");
+
+    let sbt: SBT<Node<Nodegraph>, Leaf<Signature>> =
+        SBT::from_path(filename).expect("Loading error");
+
+    let leaf: Leaf<Signature> = (*sbt.leaves().first().unwrap()).clone();
+
+    let mut linear = LinearIndexBuilder::default()
+        .storage(sbt.storage())
+        .build()
+        .unwrap();
+    for l in &sbt.leaves() {
+        linear.insert(l);
+    }
+
+    let sbt_find = Fun::new(
+        "sbt_find",
+        move |b: &mut Bencher, leaf: &Leaf<Signature>| {
+            b.iter(|| sbt.find(search_minhashes, leaf, 0.1))
+        },
+    );
+
+    let linear_find = Fun::new(
+        "linear_find",
+        move |b: &mut Bencher, leaf: &Leaf<Signature>| {
+            b.iter(|| linear.find(search_minhashes, leaf, 0.1))
+        },
+    );
+
+    let functions = vec![sbt_find, linear_find];
+    c.bench_functions("find_subset", functions, leaf);
+}
+
+criterion_group!(benches, find_small_bench, find_subset_bench);
 criterion_main!(benches);
