@@ -8,8 +8,8 @@ use fixedbitset::FixedBitSet;
 
 type HashIntoType = u64;
 
-#[derive(Debug)]
-pub(crate) struct Nodegraph {
+#[derive(Debug, Default, Clone)]
+pub struct Nodegraph {
     bs: Vec<FixedBitSet>,
     ksize: usize,
     occupied_bins: usize,
@@ -80,7 +80,8 @@ impl Nodegraph {
                     if !bs.put(x) {
                         new_bins += 1;
                     }
-                }).count();
+                })
+                .count();
         }
         // TODO: occupied bins seems to be broken in khmer? I don't get the same
         // values...
@@ -152,7 +153,7 @@ impl Nodegraph {
 
             let mut counts = FixedBitSet::with_capacity(tablesize);
             for pos in 0..byte_size {
-                let mut byte = rdr.read_u8()?;
+                let byte = rdr.read_u8()?;
                 if byte == 0 {
                     continue;
                 }
@@ -230,8 +231,9 @@ mod test {
     use std::path::PathBuf;
 
     use proptest::num::u64;
+    use proptest::{prop_assert, prop_assert_eq, prop_assume, proptest, proptest_helper};
 
-    proptest!{
+    proptest! {
       #[test]
       fn count_and_get(hash in u64::ANY) {
           let mut ng: Nodegraph = Nodegraph::new(&[10], 3);
@@ -812,7 +814,7 @@ mod test {
             802340523858506,
             803596407436267,
         ]
-            .iter()
+        .iter()
         {
             assert_eq!(ng.get(*h), 1);
         }

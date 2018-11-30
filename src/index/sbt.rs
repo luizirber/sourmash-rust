@@ -1,34 +1,40 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
+use std::hash::{BuildHasherDefault, Hasher};
 use std::io::{BufReader, Read};
+use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use derive_builder::Builder;
 use failure::Error;
-use serde::de::{Deserialize, Deserializer};
-use serde::ser::{Serialize, SerializeStruct, Serializer};
+use lazy_init::Lazy;
+use serde_derive::Deserialize;
 
-use index::nodegraph::Nodegraph;
-use index::storage::{FSStorage, ReadData, Storage, StorageInfo};
-use index::{Comparable, Index, Leaf, LeafInfo};
-use Signature;
+use crate::index::nodegraph::Nodegraph;
+use crate::index::storage::{FSStorage, ReadData, Storage, StorageInfo};
+use crate::index::{Comparable, Index, Leaf, LeafInfo};
+use crate::Signature;
 
 #[derive(Builder)]
 pub struct SBT<N, L> {
     #[builder(default = "2")]
     d: u32,
 
-    storage: Rc<Storage>,
+    storage: Rc<dyn Storage>,
+
+    #[builder(setter(skip))]
     factory: Factory,
 
-    #[builder(setter(skip))]
     nodes: HashMap<u64, N>,
 
-    #[builder(setter(skip))]
     leaves: HashMap<u64, L>,
 }
 
-impl<N, L> SBT<N, L> {
+impl<N, L> SBT<N, L>
+where
+    L: std::clone::Clone,
+{
     #[inline(always)]
     fn parent(&self, pos: u64) -> Option<u64> {
         if pos == 0 {
@@ -48,19 +54,23 @@ impl<N, L> SBT<N, L> {
         (0..u64::from(self.d)).map(|c| self.child(pos, c)).collect()
     }
 
-    pub fn leaves(&self) -> Vec<&L> {
-        self.leaves.values().collect()
+    pub fn leaves(&self) -> Vec<L> {
+        self.leaves.values().cloned().collect()
     }
 
-    pub fn storage(&self) -> Rc<Storage> {
+    pub fn storage(&self) -> Rc<dyn Storage> {
         Rc::clone(&self.storage)
     }
 
     // combine
 }
 
-impl SBT<Node, Leaf> {
-    pub fn from_reader<R, P>(rdr: &mut R, path: P) -> Result<SBT<Node, Leaf>, Error>
+impl<T, U> SBT<Node<U>, Leaf<T>>
+where
+    T: std::marker::Sync,
+    U: std::marker::Sync,
+{
+    pub fn from_reader<R, P>(rdr: &mut R, path: P) -> Result<SBT<Node<U>, Leaf<T>>, Error>
     where
         R: Read,
         P: AsRef<Path>,
@@ -73,7 +83,7 @@ impl SBT<Node, Leaf> {
         basepath.push(path);
         basepath.push(&sbt.storage.args["path"]);
 
-        let storage: Rc<Storage> = Rc::new(FSStorage { basepath });
+        let storage: Rc<dyn Storage> = Rc::new(FSStorage { basepath });
 
         Ok(SBT {
             d: sbt.d,
@@ -88,9 +98,11 @@ impl SBT<Node, Leaf> {
                         name: l.name,
                         metadata: l.metadata,
                         storage: Some(Rc::clone(&storage)),
+                        data: Rc::new(Lazy::new()),
                     };
                     (n, new_node)
-                }).collect(),
+                })
+                .collect(),
             leaves: sbt
                 .leaves
                 .into_iter()
@@ -100,13 +112,15 @@ impl SBT<Node, Leaf> {
                         name: l.name,
                         metadata: l.metadata,
                         storage: Some(Rc::clone(&storage)),
+                        data: Rc::new(Lazy::new()),
                     };
                     (n, new_node)
-                }).collect(),
+                })
+                .collect(),
         })
     }
 
-    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<SBT<Node, Leaf>, Error> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<SBT<Node<U>, Leaf<T>>, Error> {
         let file = File::open(&path)?;
         let mut reader = BufReader::new(file);
 
@@ -116,7 +130,7 @@ impl SBT<Node, Leaf> {
         basepath.push(path);
         basepath.canonicalize()?;
 
-        let sbt = SBT::<Node, Leaf>::from_reader(&mut reader, &basepath.parent().unwrap())?;
+        let sbt = SBT::<Node<U>, Leaf<T>>::from_reader(&mut reader, &basepath.parent().unwrap())?;
         Ok(sbt)
     }
 }
@@ -124,13 +138,13 @@ impl SBT<Node, Leaf> {
 impl<N, L> Index for SBT<N, L>
 where
     N: Comparable<N> + Comparable<L>,
-    L: Comparable<L>,
+    L: Comparable<L> + std::clone::Clone,
 {
     type Item = L;
 
     fn find<F>(&self, search_fn: F, sig: &L, threshold: f64) -> Result<Vec<&L>, Error>
     where
-        F: Fn(&Comparable<Self::Item>, &Self::Item, f64) -> bool,
+        F: Fn(&dyn Comparable<Self::Item>, &Self::Item, f64) -> bool,
     {
         let mut matches = Vec::new();
         let mut visited = HashSet::new();
@@ -175,18 +189,24 @@ pub struct Factory {
     args: Vec<u64>,
 }
 
-pub struct Node {
+#[derive(Builder, Default, Clone)]
+pub struct Node<T>
+where
+    T: std::marker::Sync,
+{
     filename: String,
     name: String,
     metadata: HashMap<String, u64>,
-    storage: Option<Rc<Storage>>,
+    storage: Option<Rc<dyn Storage>>,
+    #[builder(setter(skip))]
+    pub(crate) data: Rc<Lazy<T>>,
 }
 
-impl Comparable<Node> for Node {
-    fn similarity(&self, other: &Node) -> f64 {
+impl Comparable<Node<Nodegraph>> for Node<Nodegraph> {
+    fn similarity(&self, other: &Node<Nodegraph>) -> f64 {
         if let Some(storage) = &self.storage {
-            let ng: Nodegraph = self.data(&**storage).unwrap();
-            let ong: Nodegraph = other.data(&**storage).unwrap();
+            let ng: &Nodegraph = self.data(&**storage).unwrap();
+            let ong: &Nodegraph = other.data(&**storage).unwrap();
             ng.similarity(&ong)
         } else {
             // TODO: in this case storage is not set up,
@@ -195,10 +215,10 @@ impl Comparable<Node> for Node {
         }
     }
 
-    fn containment(&self, other: &Node) -> f64 {
+    fn containment(&self, other: &Node<Nodegraph>) -> f64 {
         if let Some(storage) = &self.storage {
-            let ng: Nodegraph = self.data(&**storage).unwrap();
-            let ong: Nodegraph = other.data(&**storage).unwrap();
+            let ng: &Nodegraph = self.data(&**storage).unwrap();
+            let ong: &Nodegraph = other.data(&**storage).unwrap();
             ng.containment(&ong)
         } else {
             // TODO: in this case storage is not set up,
@@ -208,11 +228,11 @@ impl Comparable<Node> for Node {
     }
 }
 
-impl Comparable<Leaf> for Node {
-    fn similarity(&self, other: &Leaf) -> f64 {
+impl Comparable<Leaf<Signature>> for Node<Nodegraph> {
+    fn similarity(&self, other: &Leaf<Signature>) -> f64 {
         if let Some(storage) = &self.storage {
-            let ng: Nodegraph = self.data(&**storage).unwrap();
-            let oth: Signature = other.data(&**storage).unwrap();
+            let ng: &Nodegraph = self.data(&**storage).unwrap();
+            let oth: &Signature = other.data(&**storage).unwrap();
 
             // TODO: select the right signatures...
             let sig = &oth.signatures[0];
@@ -233,10 +253,10 @@ impl Comparable<Leaf> for Node {
         }
     }
 
-    fn containment(&self, other: &Leaf) -> f64 {
+    fn containment(&self, other: &Leaf<Signature>) -> f64 {
         if let Some(storage) = &self.storage {
-            let ng: Nodegraph = self.data(&**storage).unwrap();
-            let oth: Signature = other.data(&**storage).unwrap();
+            let ng: &Nodegraph = self.data(&**storage).unwrap();
+            let oth: &Signature = other.data(&**storage).unwrap();
 
             // TODO: select the right signatures...
             let sig = &oth.signatures[0];
@@ -254,14 +274,12 @@ impl Comparable<Leaf> for Node {
     }
 }
 
-impl<S: Storage + ?Sized> ReadData<Nodegraph, S> for Node {
-    fn data(&self, storage: &S) -> Result<Nodegraph, Error> {
-        // TODO: cache this call!
-        // probably use lazy-init with a field in the struct?
-        // https://docs.rs/lazy-init/0.3.0/lazy_init/
-        // or lazy_cell
-        let raw = storage.load(&self.filename)?;
-        Nodegraph::from_reader(&mut &raw[..])
+impl<S: Storage + ?Sized> ReadData<Nodegraph, S> for Node<Nodegraph> {
+    fn data(&self, storage: &S) -> Result<&Nodegraph, Error> {
+        Ok(self.data.get_or_create(|| {
+            let raw = storage.load(&self.filename).unwrap();
+            Nodegraph::from_reader(&mut &raw[..]).unwrap()
+        }))
     }
 }
 
@@ -282,18 +300,234 @@ struct SBTInfo<N, L> {
     leaves: HashMap<u64, L>,
 }
 
+// This comes from finch
+pub struct NoHashHasher(u64);
+
+impl Default for NoHashHasher {
+    #[inline]
+    fn default() -> NoHashHasher {
+        NoHashHasher(0x0)
+    }
+}
+
+impl Hasher for NoHashHasher {
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        *self = NoHashHasher(
+            (u64::from(bytes[0]) << 24)
+                + (u64::from(bytes[1]) << 16)
+                + (u64::from(bytes[2]) << 8)
+                + u64::from(bytes[3]),
+        );
+    }
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
+type HashIntersection = HashSet<u64, BuildHasherDefault<NoHashHasher>>;
+
+enum BinaryTree {
+    Empty,
+    Internal(Box<TreeNode<HashIntersection>>),
+    Leaf(Box<TreeNode<Leaf<Signature>>>),
+}
+
+struct TreeNode<T> {
+    element: T,
+    left: BinaryTree,
+    right: BinaryTree,
+}
+
+pub fn scaffold<N>(mut datasets: Vec<Leaf<Signature>>) -> SBT<Node<N>, Leaf<Signature>>
+where
+    N: std::marker::Sync + std::clone::Clone + std::default::Default,
+{
+    let mut leaves: HashMap<u64, Leaf<Signature>> = HashMap::with_capacity(datasets.len());
+
+    let mut next_round = Vec::new();
+
+    // generate two bottom levels:
+    // - datasets
+    // - first level of internal nodes
+    eprintln!("Start processing leaves");
+    while !datasets.is_empty() {
+        let next_leaf = datasets.pop().unwrap();
+
+        let (simleaf_tree, in_common) = if datasets.is_empty() {
+            (
+                BinaryTree::Empty,
+                HashIntersection::from_iter(next_leaf.mins().into_iter()),
+            )
+        } else {
+            let mut similar_leaf_pos = 0;
+            let mut current_max = 0;
+            for (pos, leaf) in datasets.iter().enumerate() {
+                let common = next_leaf.count_common(leaf);
+                if common > current_max {
+                    current_max = common;
+                    similar_leaf_pos = pos;
+                }
+            }
+
+            let similar_leaf = datasets.remove(similar_leaf_pos);
+
+            let in_common = HashIntersection::from_iter(next_leaf.mins().into_iter())
+                .union(&HashIntersection::from_iter(
+                    similar_leaf.mins().into_iter(),
+                ))
+                .cloned()
+                .collect();
+
+            let simleaf_tree = BinaryTree::Leaf(Box::new(TreeNode {
+                element: similar_leaf,
+                left: BinaryTree::Empty,
+                right: BinaryTree::Empty,
+            }));
+            (simleaf_tree, in_common)
+        };
+
+        let leaf_tree = BinaryTree::Leaf(Box::new(TreeNode {
+            element: next_leaf,
+            left: BinaryTree::Empty,
+            right: BinaryTree::Empty,
+        }));
+
+        let tree = BinaryTree::Internal(Box::new(TreeNode {
+            element: in_common,
+            left: leaf_tree,
+            right: simleaf_tree,
+        }));
+
+        next_round.push(tree);
+
+        if next_round.len() % 100 == 0 {
+            eprintln!("Processed {} leaves", next_round.len() * 2);
+        }
+    }
+    eprintln!("Finished processing leaves");
+
+    // while we don't get to the root, generate intermediary levels
+    while next_round.len() != 1 {
+        next_round = BinaryTree::process_internal_level(next_round);
+        eprintln!("Finished processing round {}", next_round.len());
+    }
+
+    // Convert from binary tree to nodes/leaves
+    let root = next_round.pop().unwrap();
+    let mut visited = HashSet::new();
+    let mut queue = vec![(0u64, root)];
+
+    while !queue.is_empty() {
+        let (pos, cnode) = queue.pop().unwrap();
+        if !visited.contains(&pos) {
+            visited.insert(pos);
+
+            match cnode {
+                BinaryTree::Leaf(leaf) => {
+                    leaves.insert(pos, leaf.element);
+                }
+                BinaryTree::Internal(mut node) => {
+                    let left = std::mem::replace(&mut node.left, BinaryTree::Empty);
+                    let right = std::mem::replace(&mut node.right, BinaryTree::Empty);
+                    queue.push((2 * pos + 1, left));
+                    queue.push((2 * pos + 2, right));
+                }
+                BinaryTree::Empty => (),
+            }
+        }
+    }
+
+    // save the new tree
+
+    let storage: Rc<dyn Storage> = Rc::new(FSStorage {
+        basepath: ".sbt".into(),
+    });
+
+    SBTBuilder::default()
+        .storage(storage)
+        .nodes(HashMap::default())
+        .leaves(leaves)
+        .build()
+        .unwrap()
+}
+
+impl BinaryTree {
+    fn process_internal_level(mut current_round: Vec<BinaryTree>) -> Vec<BinaryTree> {
+        let mut next_round = Vec::with_capacity(current_round.len() + 1);
+
+        while !current_round.is_empty() {
+            let next_node = current_round.pop().unwrap();
+
+            let similar_node = if current_round.is_empty() {
+                BinaryTree::Empty
+            } else {
+                let mut similar_node_pos = 0;
+                let mut current_max = 0;
+                for (pos, cmpe) in current_round.iter().enumerate() {
+                    let common = BinaryTree::intersection_size(&next_node, &cmpe);
+                    if common > current_max {
+                        current_max = common;
+                        similar_node_pos = pos;
+                    }
+                }
+                current_round.remove(similar_node_pos)
+            };
+
+            let tree = BinaryTree::new_tree(next_node, similar_node);
+
+            next_round.push(tree);
+        }
+        next_round
+    }
+
+    fn new_tree(mut left: BinaryTree, mut right: BinaryTree) -> BinaryTree {
+        let in_common = if let BinaryTree::Internal(ref mut el1) = left {
+            match right {
+                BinaryTree::Internal(ref mut el2) => {
+                    let c1 = std::mem::replace(&mut el1.element, HashIntersection::default());
+                    let c2 = std::mem::replace(&mut el2.element, HashIntersection::default());
+                    c1.union(&c2).cloned().collect()
+                }
+                BinaryTree::Empty => {
+                    std::mem::replace(&mut el1.element, HashIntersection::default())
+                }
+                _ => panic!("Should not see a Leaf at this level"),
+            }
+        } else {
+            HashIntersection::default()
+        };
+
+        BinaryTree::Internal(Box::new(TreeNode {
+            element: in_common,
+            left,
+            right,
+        }))
+    }
+
+    fn intersection_size(n1: &BinaryTree, n2: &BinaryTree) -> usize {
+        if let BinaryTree::Internal(ref el1) = n1 {
+            if let BinaryTree::Internal(ref el2) = n2 {
+                return el1.element.intersection(&el2.element).count();
+            }
+        };
+        0
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use index::linear::{LinearIndex, LinearIndexBuilder};
-    use index::search::{search_minhashes, search_minhashes_containment};
+    use crate::index::linear::{LinearIndex, LinearIndexBuilder};
+    use crate::index::search::{search_minhashes, search_minhashes_containment};
 
     #[test]
     fn load_sbt() {
         let mut filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         filename.push("tests/data/v5.sbt.json");
 
-        let sbt = SBT::<Node, Leaf>::from_path(filename).expect("Loading error");
+        let sbt =
+            SBT::<Node<Nodegraph>, Leaf<Signature>>::from_path(filename).expect("Loading error");
 
         assert_eq!(sbt.d, 2);
         //assert_eq!(sbt.storage.backend, "FSStorage");
@@ -316,7 +550,7 @@ mod test {
         println!("leaf: {:?}", leaf);
 
         let mut linear = LinearIndexBuilder::default()
-            .storage(Rc::clone(&sbt.storage) as Rc<Storage>)
+            .storage(Rc::clone(&sbt.storage) as Rc<dyn Storage>)
             .build()
             .unwrap();
         for l in &sbt.leaves {
@@ -352,5 +586,17 @@ mod test {
         assert_eq!(results.len(), 4);
         println!("results: {:?}", results);
         println!("leaf: {:?}", leaf);
+    }
+
+    #[test]
+    fn scaffold_sbt() {
+        let mut filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        filename.push("tests/data/v5.sbt.json");
+
+        let sbt =
+            SBT::<Node<Nodegraph>, Leaf<Signature>>::from_path(filename).expect("Loading error");
+
+        let new_sbt: SBT<Node<Nodegraph>, Leaf<Signature>> = scaffold(sbt.leaves());
+        assert_eq!(new_sbt.leaves().len(), 7);
     }
 }

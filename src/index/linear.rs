@@ -1,15 +1,16 @@
 use std::path::Path;
 use std::rc::Rc;
 
+use derive_builder::Builder;
 use failure::Error;
 
-use index::storage::Storage;
-use index::{Comparable, Index};
+use crate::index::storage::Storage;
+use crate::index::{Comparable, Index};
 
 #[derive(Builder)]
 pub struct LinearIndex<L> {
     //#[builder(setter(skip))]
-    storage: Rc<Storage>,
+    storage: Rc<dyn Storage>,
 
     #[builder(setter(skip))]
     pub(crate) leaves: Vec<L>,
@@ -28,7 +29,7 @@ where
         threshold: f64,
     ) -> Result<Vec<&Self::Item>, Error>
     where
-        F: Fn(&Comparable<Self::Item>, &Self::Item, f64) -> bool,
+        F: Fn(&dyn Comparable<Self::Item>, &Self::Item, f64) -> bool,
     {
         Ok(self
             .leaves
@@ -39,7 +40,8 @@ where
                 } else {
                     None
                 }
-            }).collect())
+            })
+            .collect())
     }
 
     fn insert(&mut self, node: &L) {

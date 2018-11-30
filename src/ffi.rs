@@ -1,11 +1,16 @@
-use serde_json;
 use std::ffi::CStr;
+use std::fs::File;
+use std::io;
 use std::mem;
 use std::os::raw::c_char;
 use std::ptr;
 use std::slice;
-use utils::SourmashStr;
-use {KmerMinHash, Signature, _hash_murmur};
+
+use serde_json;
+
+use crate::file::get_input;
+use crate::utils::SourmashStr;
+use crate::{KmerMinHash, Signature, _hash_murmur};
 
 #[no_mangle]
 pub extern "C" fn hash_murmur(kmer: *const c_char, seed: u64) -> u64 {
@@ -529,14 +534,13 @@ unsafe fn signatures_save_buffer(ptr: *mut *mut Signature, size: usize) -> Resul
 }
 
 ffi_fn! {
-unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool,
-                                 ksize: usize,
-                                 select_moltype: *const c_char,
-                                 size: *mut usize) -> Result<*mut *mut Signature> {
-
-    let c_str = {
+unsafe fn signatures_load_path(ptr: *const c_char,
+                               ignore_md5sum: bool,
+                               ksize: usize,
+                               select_moltype: *const c_char,
+                               size: *mut usize) -> Result<*mut *mut Signature> {
+    let buf = {
         assert!(!ptr.is_null());
-
         CStr::from_ptr(ptr)
     };
 
@@ -544,49 +548,51 @@ unsafe fn signatures_load_buffer(ptr: *const c_char, ignore_md5sum: bool,
         if select_moltype.is_null() {
           None
         } else {
-          Some(CStr::from_ptr(select_moltype))
+          Some(CStr::from_ptr(select_moltype).to_str()?)
         }
     };
 
+    // TODO: implement ignore_md5sum
+
+    let (mut input, _) = get_input(buf.to_str()?);
+    let filtered_sigs = Signature::load_signatures(&mut input, ksize, moltype, None)?;
+
+    let ptr_sigs: Vec<*mut Signature> = filtered_sigs.into_iter().map(|x| {
+      Box::into_raw(Box::new(x)) as *mut Signature
+    }).collect();
+
+    let b = ptr_sigs.into_boxed_slice();
+    *size = b.len();
+
+    Ok(Box::into_raw(b) as *mut *mut Signature)
+}
+}
+ffi_fn! {
+unsafe fn signatures_load_buffer(ptr: *const c_char,
+                                 insize: usize,
+                                 ignore_md5sum: bool,
+                                 ksize: usize,
+                                 select_moltype: *const c_char,
+                                 size: *mut usize) -> Result<*mut *mut Signature> {
+    let buf = {
+        assert!(!ptr.is_null());
+        slice::from_raw_parts(ptr as *mut u8, insize)
+    };
+
+    let moltype = {
+        if select_moltype.is_null() {
+          None
+        } else {
+          Some(CStr::from_ptr(select_moltype).to_str()?)
+        }
+    };
 
     // TODO: implement ignore_md5sum
 
-    let orig_sigs: Vec<Signature> = serde_json::from_str(c_str.to_str()?)?;
+    let mut reader = io::BufReader::new(buf);
+    let filtered_sigs = Signature::load_signatures(&mut reader, ksize, moltype, None)?;
 
-    let flat_sigs = orig_sigs.into_iter().flat_map(|s| {
-      s.signatures.iter().map(|mh| {
-          let mut new_s = s.clone();
-          new_s.signatures = vec![mh.clone()];
-          new_s
-      }).collect::<Vec<Signature>>()
-    });
-
-    let filtered_sigs = flat_sigs
-       .filter_map(|mut sig| {
-         let good_mhs: Vec<KmerMinHash> = sig.signatures.into_iter().filter_map(|mh| {
-           if ksize == 0 || ksize == mh.ksize as usize {
-             match moltype {
-              Some(x) => if (x.to_str() == Ok("DNA") && !mh.is_protein) || (x.to_str() == Ok("protein") && mh.is_protein) {
-                  return Some(mh)
-                },
-              None => {
-                 return Some(mh)
-              }
-             };
-           };
-           None
-         }).collect();
-
-        if good_mhs.is_empty() {
-          return None
-        };
-
-        sig.signatures = good_mhs;
-        Some(sig)
-       });
-
-
-    let ptr_sigs: Vec<*mut Signature> = filtered_sigs.map(|x| {
+    let ptr_sigs: Vec<*mut Signature> = filtered_sigs.into_iter().map(|x| {
       Box::into_raw(Box::new(x)) as *mut Signature
     }).collect();
 

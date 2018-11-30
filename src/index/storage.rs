@@ -3,11 +3,13 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
 
+use derive_builder::Builder;
 use failure::Error;
+use serde_derive::Deserialize;
 
 /// Implemented by anything that wants to read specific data from a storage.
 pub trait ReadData<D, S: Storage + ?Sized> {
-    fn data(&self, storage: &S) -> Result<D, Error>;
+    fn data(&self, storage: &S) -> Result<&D, Error>;
 }
 
 #[derive(Deserialize)]

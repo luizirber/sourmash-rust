@@ -1,4 +1,4 @@
-extern crate sourmash;
+
 
 use sourmash::KmerMinHash;
 

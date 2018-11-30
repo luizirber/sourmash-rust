@@ -121,10 +121,17 @@ void signature_set_mh(Signature *ptr, const KmerMinHash *other);
 void signature_set_name(Signature *ptr, const char *name);
 
 Signature **signatures_load_buffer(const char *ptr,
+                                   uintptr_t insize,
                                    bool ignore_md5sum,
                                    uintptr_t ksize,
                                    const char *select_moltype,
                                    uintptr_t *size);
+
+Signature **signatures_load_path(const char *ptr,
+                                 bool ignore_md5sum,
+                                 uintptr_t ksize,
+                                 const char *select_moltype,
+                                 uintptr_t *size);
 
 SourmashStr signatures_save_buffer(Signature **ptr, uintptr_t size);
 

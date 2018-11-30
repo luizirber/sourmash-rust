@@ -1,85 +1,37 @@
-extern crate backtrace;
-extern crate byteorder;
-extern crate failure;
-#[macro_use]
-extern crate failure_derive;
-extern crate fixedbitset;
-extern crate md5;
-extern crate murmurhash3;
-
-#[macro_use]
-extern crate serde_derive;
-extern crate serde;
-extern crate serde_json;
-
-#[cfg(feature = "from-finch")]
-extern crate finch;
-
-#[macro_use]
-extern crate derive_builder;
-
-#[macro_use]
-extern crate lazy_static;
-
-#[cfg(test)]
-#[macro_use]
-extern crate proptest;
-
-#[macro_use]
 pub mod errors;
 
 #[macro_use]
 pub mod utils;
 
-#[macro_use]
 pub mod ffi;
 
-#[macro_use]
 pub mod index;
 
 #[cfg(feature = "from-finch")]
 pub mod from;
 
+mod file;
+
 use serde::de::{Deserialize, Deserializer};
 use serde::ser::{Serialize, SerializeStruct, Serializer};
+use serde_derive::{Deserialize, Serialize};
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::hash::{BuildHasherDefault, Hasher};
-use std::iter::FromIterator;
+use std::fs::File;
+use std::io;
+use std::iter::{Iterator, Peekable};
+use std::path::Path;
 use std::str;
 
-use errors::SourmashError;
 use failure::Error;
+use lazy_static::lazy_static;
 use murmurhash3::murmurhash3_x64_128;
+
+use crate::errors::SourmashError;
 
 pub fn _hash_murmur(kmer: &[u8], seed: u64) -> u64 {
     murmurhash3_x64_128(kmer, seed).0
-}
-
-// This comes from finch
-pub struct NoHashHasher(u64);
-
-impl Default for NoHashHasher {
-    #[inline]
-    fn default() -> NoHashHasher {
-        NoHashHasher(0x0)
-    }
-}
-
-impl Hasher for NoHashHasher {
-    #[inline]
-    fn write(&mut self, bytes: &[u8]) {
-        *self = NoHashHasher(
-            (u64::from(bytes[0]) << 24)
-                + (u64::from(bytes[1]) << 16)
-                + (u64::from(bytes[2]) << 8)
-                + u64::from(bytes[3]),
-        );
-    }
-    fn finish(&self) -> u64 {
-        self.0
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -316,7 +268,8 @@ impl KmerMinHash {
                     } else if !force {
                         return Err(SourmashError::InvalidDNA {
                             message: String::from_utf8(kmer.to_vec()).unwrap(),
-                        }.into());
+                        }
+                        .into());
                     }
                 }
             } else {
@@ -361,14 +314,14 @@ impl KmerMinHash {
             let mut self_iter = self.mins.iter();
             let mut other_iter = other.mins.iter();
 
-            let mut self_abunds_iter: Option<std::slice::Iter<u64>>;
+            let mut self_abunds_iter: Option<std::slice::Iter<'_, u64>>;
             if let Some(ref mut abunds) = self.abunds {
                 self_abunds_iter = Some(abunds.iter());
             } else {
                 self_abunds_iter = None;
             }
 
-            let mut other_abunds_iter: Option<std::slice::Iter<u64>>;
+            let mut other_abunds_iter: Option<std::slice::Iter<'_, u64>>;
             if let Some(ref abunds) = other.abunds {
                 other_abunds_iter = Some(abunds.iter());
             } else {
@@ -472,16 +425,17 @@ impl KmerMinHash {
         Ok(())
     }
 
-    pub fn count_common(&mut self, other: &KmerMinHash) -> Result<u64, Error> {
+    pub fn count_common(&self, other: &KmerMinHash) -> Result<u64, Error> {
         self.check_compatible(other)?;
-        let s1: HashSet<&u64, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<&u64, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(other.mins.iter());
-        Ok(s1.intersection(&s2).count() as u64)
+        let iter = Intersection {
+            left: self.mins.iter().peekable(),
+            right: other.mins.iter().peekable(),
+        };
+
+        Ok(iter.count() as u64)
     }
 
-    pub fn intersection(&mut self, other: &KmerMinHash) -> Result<(Vec<u64>, u64), Error> {
+    pub fn intersection(&self, other: &KmerMinHash) -> Result<(Vec<u64>, u64), Error> {
         self.check_compatible(other)?;
 
         let mut combined_mh = KmerMinHash::new(
@@ -496,16 +450,20 @@ impl KmerMinHash {
         combined_mh.merge(&self)?;
         combined_mh.merge(&other)?;
 
-        let s1: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(other.mins.iter());
-        let s3: HashSet<_, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(combined_mh.mins.iter());
+        let it1 = Intersection {
+            left: self.mins.iter().peekable(),
+            right: other.mins.iter().peekable(),
+        };
 
-        let i1 = &s1 & &s2;
-        let i2 = &i1 & &s3;
+        // TODO: there is probably a way to avoid this Vec here,
+        // and pass the it1 as left in it2.
+        let i1: Vec<u64> = it1.cloned().collect();
+        let it2 = Intersection {
+            left: i1.iter().peekable(),
+            right: combined_mh.mins.iter().peekable(),
+        };
 
-        let common: Vec<u64> = i2.into_iter().cloned().collect();
+        let common: Vec<u64> = it2.cloned().collect();
         Ok((common, combined_mh.mins.len() as u64))
     }
 
@@ -524,16 +482,20 @@ impl KmerMinHash {
         combined_mh.merge(&self)?;
         combined_mh.merge(&other)?;
 
-        let s1: HashSet<_, BuildHasherDefault<NoHashHasher>> = HashSet::from_iter(self.mins.iter());
-        let s2: HashSet<_, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(other.mins.iter());
-        let s3: HashSet<_, BuildHasherDefault<NoHashHasher>> =
-            HashSet::from_iter(combined_mh.mins.iter());
+        let it1 = Intersection {
+            left: self.mins.iter().peekable(),
+            right: other.mins.iter().peekable(),
+        };
 
-        let i1 = &s1 & &s2;
-        let i2 = &i1 & &s3;
+        // TODO: there is probably a way to avoid this Vec here,
+        // and pass the it1 as left in it2.
+        let i1: Vec<u64> = it1.into_iter().cloned().collect();
+        let it2 = Intersection {
+            left: i1.iter().peekable(),
+            right: combined_mh.mins.iter().peekable(),
+        };
 
-        Ok((i2.into_iter().count() as u64, combined_mh.mins.len() as u64))
+        Ok((it2.count() as u64, combined_mh.mins.len() as u64))
     }
 
     pub fn compare(&self, other: &KmerMinHash) -> Result<f64, Error> {
@@ -547,6 +509,37 @@ impl KmerMinHash {
 
     pub fn size(&self) -> usize {
         self.mins.len()
+    }
+}
+
+struct Intersection<T, I: Iterator<Item = T>> {
+    left: Peekable<I>,
+    right: Peekable<I>,
+}
+
+impl<T: Ord, I: Iterator<Item = T>> Iterator for Intersection<T, I> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<T> {
+        loop {
+            let res = match (self.left.peek(), self.right.peek()) {
+                (Some(ref left_key), Some(ref right_key)) => left_key.cmp(right_key),
+                _ => return None,
+            };
+
+            match res {
+                Ordering::Less => {
+                    self.left.next();
+                }
+                Ordering::Greater => {
+                    self.right.next();
+                }
+                Ordering::Equal => {
+                    self.right.next();
+                    return self.left.next();
+                }
+            }
+        }
     }
 }
 
@@ -581,6 +574,75 @@ fn default_class() -> String {
 
 fn default_version() -> f64 {
     0.4
+}
+
+impl Signature {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Vec<Signature>, Error> {
+        let mut reader = io::BufReader::new(File::open(path)?);
+        Ok(Signature::from_reader(&mut reader)?)
+    }
+
+    pub fn from_reader<R>(rdr: &mut R) -> Result<Vec<Signature>, Error>
+    where
+        R: io::Read,
+    {
+        let sigs: Vec<Signature> = serde_json::from_reader(rdr)?;
+        Ok(sigs)
+    }
+
+    pub fn load_signatures<R>(
+        buf: &mut R,
+        ksize: usize,
+        moltype: Option<&str>,
+        scaled: Option<u64>,
+    ) -> Result<Vec<Signature>, Error>
+    where
+        R: io::Read,
+    {
+        let orig_sigs = Signature::from_reader(buf)?;
+
+        let flat_sigs = orig_sigs.into_iter().flat_map(|s| {
+            s.signatures
+                .iter()
+                .map(|mh| {
+                    let mut new_s = s.clone();
+                    new_s.signatures = vec![mh.clone()];
+                    new_s
+                })
+                .collect::<Vec<Signature>>()
+        });
+
+        let filtered_sigs = flat_sigs.filter_map(|mut sig| {
+            let good_mhs: Vec<KmerMinHash> = sig
+                .signatures
+                .into_iter()
+                .filter(|mh| {
+                    if ksize == 0 || ksize == mh.ksize as usize {
+                        match moltype {
+                            Some(x) => {
+                                if (x.to_lowercase() == "dna" && !mh.is_protein)
+                                    || (x.to_lowercase() == "protein" && mh.is_protein)
+                                {
+                                    return true;
+                                }
+                            }
+                            None => return true,
+                        };
+                    };
+                    false
+                })
+                .collect();
+
+            if good_mhs.is_empty() {
+                return None;
+            };
+
+            sig.signatures = good_mhs;
+            Some(sig)
+        });
+
+        Ok(filtered_sigs.collect())
+    }
 }
 
 impl Default for Signature {

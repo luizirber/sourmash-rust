@@ -1,4 +1,4 @@
-extern crate sourmash;
+
 
 #[cfg(feature = "from-finch")]
 extern crate finch;
