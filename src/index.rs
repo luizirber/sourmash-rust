@@ -74,10 +74,8 @@ where
     pub(crate) name: String,
     pub(crate) metadata: String,
 
-    #[builder(setter(skip))]
     pub(crate) storage: Option<Rc<dyn Storage>>,
 
-    #[builder(setter(skip))]
     pub(crate) data: Rc<Lazy<T>>,
 }
 

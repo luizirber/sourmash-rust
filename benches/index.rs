@@ -1,14 +1,12 @@
 #[macro_use]
 extern crate criterion;
 
-
-
 use std::path::PathBuf;
 
 use criterion::{Bencher, Criterion, Fun};
 use sourmash::index::linear::LinearIndexBuilder;
 use sourmash::index::nodegraph::Nodegraph;
-use sourmash::index::sbt::{Node, SBT};
+use sourmash::index::sbt::{Node, MHBT, SBT};
 use sourmash::index::search::search_minhashes;
 use sourmash::index::{Index, Leaf};
 use sourmash::Signature;
@@ -17,8 +15,7 @@ fn find_small_bench(c: &mut Criterion) {
     let mut filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     filename.push("tests/data/v5.sbt.json");
 
-    let sbt: SBT<Node<Nodegraph>, Leaf<Signature>> =
-        SBT::from_path(filename).expect("Loading error");
+    let sbt: MHBT = SBT::from_path(filename).expect("Loading error");
 
     let leaf: Leaf<Signature> = (*sbt.leaves().first().unwrap()).clone();
 
@@ -52,8 +49,7 @@ fn find_subset_bench(c: &mut Criterion) {
     let mut filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     filename.push("tests/data/subset.sbt.json");
 
-    let sbt: SBT<Node<Nodegraph>, Leaf<Signature>> =
-        SBT::from_path(filename).expect("Loading error");
+    let sbt: MHBT = SBT::from_path(filename).expect("Loading error");
 
     let leaf: Leaf<Signature> = (*sbt.leaves().first().unwrap()).clone();
 

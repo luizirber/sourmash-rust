@@ -16,6 +16,8 @@ use crate::index::storage::{FSStorage, ReadData, Storage, StorageInfo};
 use crate::index::{Comparable, Index, Leaf, LeafInfo};
 use crate::Signature;
 
+pub type MHBT = SBT<Node<Nodegraph>, Leaf<Signature>>;
+
 #[derive(Builder)]
 pub struct SBT<N, L> {
     #[builder(default = "2")]
@@ -526,8 +528,7 @@ mod test {
         let mut filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         filename.push("tests/data/v5.sbt.json");
 
-        let sbt =
-            SBT::<Node<Nodegraph>, Leaf<Signature>>::from_path(filename).expect("Loading error");
+        let sbt = MHBT::from_path(filename).expect("Loading error");
 
         assert_eq!(sbt.d, 2);
         //assert_eq!(sbt.storage.backend, "FSStorage");
@@ -593,10 +594,9 @@ mod test {
         let mut filename = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         filename.push("tests/data/v5.sbt.json");
 
-        let sbt =
-            SBT::<Node<Nodegraph>, Leaf<Signature>>::from_path(filename).expect("Loading error");
+        let sbt = MHBT::from_path(filename).expect("Loading error");
 
-        let new_sbt: SBT<Node<Nodegraph>, Leaf<Signature>> = scaffold(sbt.leaves());
+        let new_sbt: MHBT = scaffold(sbt.leaves());
         assert_eq!(new_sbt.leaves().len(), 7);
     }
 }

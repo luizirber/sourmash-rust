@@ -1,15 +1,18 @@
 use std::fs::File;
 use std::io;
+use std::path::Path;
+use std::rc::Rc;
 
 use clap::{load_yaml, App};
 use exitfailure::ExitFailure;
 use failure::{Error, ResultExt};
 use human_panic::setup_panic;
-use log::{debug, info, LevelFilter};
+use log::{debug, error, info, LevelFilter};
 
 use sourmash::index::nodegraph::Nodegraph;
-use sourmash::index::sbt::{scaffold, Node, SBT};
-use sourmash::index::{Index, Leaf};
+use sourmash::index::sbt::{scaffold, Node, MHBT, SBT};
+use sourmash::index::search::search_minhashes;
+use sourmash::index::{Index, Leaf, LeafBuilder};
 use sourmash::Signature;
 
 struct Query<T> {
@@ -36,6 +39,14 @@ impl Query<Signature> {
     }
 }
 
+impl From<Query<Signature>> for Leaf<Signature> {
+    fn from(other: Query<Signature>) -> Leaf<Signature> {
+        let leaf = LeafBuilder::default().build().unwrap();
+        //leaf.data.get_or_create(|| data.query);
+        leaf
+    }
+}
+
 fn load_query_signature(
     query: &str,
     ksize: usize,
@@ -53,21 +64,84 @@ fn load_query_signature(
 }
 
 struct Database {
-    data: String,
+    data: MHBT,
+    path: String,
+    is_index: bool,
 }
 
 fn load_sbts_and_sigs(
-    databases: Vec<&str>,
+    filenames: &[&str],
     query: &Query<Signature>,
     containment: bool,
-    traverse_directory: bool,
+    traverse: bool,
 ) -> Result<Vec<Database>, Error> {
-    let dbs = Vec::default();
+    let mut dbs = Vec::default();
 
     let ksize = query.ksize();
     let moltype = query.moltype();
 
+    let mut n_signatures = 0;
+    let mut n_databases = 0;
+
+    for path in filenames {
+        if traverse && Path::new(path).is_dir() {
+            continue;
+        }
+
+        if let Ok(data) = MHBT::from_path(path) {
+            // TODO: check compatible
+            dbs.push(Database {
+                data,
+                path: String::from(*path),
+                is_index: true,
+            });
+            info!("loaded SBT {}", path);
+            n_databases += 1;
+            continue;
+        }
+
+        // TODO: load sig, need to change Database
+    }
+
+    if n_signatures > 0 && n_databases > 0 {
+        info!(
+            "loaded {} signatures and {} databases total.",
+            n_signatures, n_databases
+        );
+    } else if n_signatures > 0 {
+        info!("loaded {} signatures.", n_signatures);
+    } else if n_databases > 0 {
+        info!("loaded {} databases.", n_databases);
+    } else {
+        return Err(failure::err_msg("Couldn't load any databases"));
+    }
+
     Ok(dbs)
+}
+
+struct Results {
+    similarity: f64,
+    match_sig: Signature,
+}
+
+fn search_databases(
+    query: Query<Signature>,
+    databases: &[Database],
+    threshold: f64,
+    containment: bool,
+    best_only: bool,
+    ignore_abundance: bool,
+) -> Result<Vec<Results>, Error> {
+    let mut results = Vec::default();
+
+    let search_fn = search_minhashes;
+    let query_leaf = query.into();
+
+    for db in databases {
+        for dataset in db.data.find(search_fn, &query_leaf, threshold) {}
+    }
+
+    Ok(results)
 }
 
 fn main() -> Result<(), ExitFailure> {
@@ -83,8 +157,8 @@ fn main() -> Result<(), ExitFailure> {
             let cmd = m.subcommand_matches("scaffold").unwrap();
             let sbt_file = cmd.value_of("current_sbt").unwrap();
 
-            let sbt: SBT<Node<Nodegraph>, Leaf<Signature>> = SBT::from_path(sbt_file)?;
-            let new_sbt: SBT<Node<Nodegraph>, Leaf<Signature>> = scaffold(sbt.leaves());
+            let sbt = MHBT::from_path(sbt_file)?;
+            let new_sbt: MHBT = scaffold(sbt.leaves());
 
             assert_eq!(new_sbt.leaves().len(), 100);
             Ok(())
@@ -111,15 +185,6 @@ fn main() -> Result<(), ExitFailure> {
                 },
             )?;
 
-            let databases = load_sbts_and_sigs(
-                cmd.values_of("databases")
-                    .map(|vals| vals.collect::<Vec<_>>())
-                    .unwrap(),
-                &query,
-                !cmd.is_present("containment"),
-                cmd.is_present("traverse-directory"),
-            );
-
             info!(
                 "loaded query: {}... (k={}, {})",
                 query.name(),
@@ -127,9 +192,76 @@ fn main() -> Result<(), ExitFailure> {
                 query.moltype()
             );
 
+            let containment = cmd.is_present("containment");
+            let traverse_directory = cmd.is_present("traverse-directory");
+            let databases = load_sbts_and_sigs(
+                &cmd.values_of("databases")
+                    .map(|vals| vals.collect::<Vec<_>>())
+                    .unwrap(),
+                &query,
+                containment,
+                traverse_directory,
+            )?;
+
+            if databases.len() == 0 {
+                return Err(failure::err_msg("Nothing found to search!").into());
+            }
+
+            let best_only = cmd.is_present("best-only");
+            let threshold = cmd.value_of("threshold").unwrap().parse().unwrap();
+            let ignore_abundance = cmd.is_present("ignore-abundance");
+            let results = search_databases(
+                query,
+                &databases,
+                threshold,
+                containment,
+                best_only,
+                ignore_abundance,
+            )?;
+
+            let num_results = if best_only {
+                1
+            } else {
+                cmd.value_of("num-results").unwrap().parse().unwrap()
+            };
+
+            let n_matches = if num_results == 0 || results.len() < num_results {
+                println!("{} matches:", results.len());
+                results.len()
+            } else {
+                println!("{} matches; showing first {}:", results.len(), num_results);
+                num_results
+            };
+
+            println!("similarity   match");
+            println!("----------   -----");
+            for sr in &results[..n_matches] {
+                println!(
+                    "{:>6.1}%       {:60}",
+                    sr.similarity * 100.,
+                    sr.match_sig.name.clone().unwrap()
+                );
+            }
+
+            if best_only {
+                info!("** reporting only one match because --best-only was set")
+            }
+
             /*
-            info!("Shouldn't show up with -q!");
-            debug!("{:?}", cmd);
+            if args.output:
+                fieldnames = ['similarity', 'name', 'filename', 'md5']
+                w = csv.DictWriter(args.output, fieldnames=fieldnames)
+                w.writeheader()
+
+                for sr in &results:
+                    d = dict(sr._asdict())
+                    del d['match_sig']
+                    w.writerow(d)
+
+            if args.save_matches:
+                outname = args.save_matches.name
+                info!("saving all matched signatures to \"{}\"", outname)
+                Signature::save_signatures([sr.match_sig for sr in results], args.save_matches)
             */
 
             Ok(())
