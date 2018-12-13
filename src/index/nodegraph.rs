@@ -8,8 +8,8 @@ use fixedbitset::FixedBitSet;
 
 type HashIntoType = u64;
 
-#[derive(Debug)]
-pub(crate) struct Nodegraph {
+#[derive(Debug, Default, Clone)]
+pub struct Nodegraph {
     bs: Vec<FixedBitSet>,
     ksize: usize,
     occupied_bins: usize,
@@ -45,7 +45,7 @@ impl Nodegraph {
         if is_new_kmer {
             self.unique_kmers += 1
         }
-        return is_new_kmer;
+        is_new_kmer
     }
 
     pub fn get(&self, hash: HashIntoType) -> usize {
@@ -55,7 +55,7 @@ impl Nodegraph {
                 return 0;
             }
         }
-        return 1;
+        1
     }
 
     // update
@@ -80,7 +80,8 @@ impl Nodegraph {
                     if !bs.put(x) {
                         new_bins += 1;
                     }
-                }).count();
+                })
+                .count();
         }
         // TODO: occupied bins seems to be broken in khmer? I don't get the same
         // values...
@@ -97,7 +98,7 @@ impl Nodegraph {
     where
         W: io::Write,
     {
-        wtr.write(b"OXLI")?;
+        wtr.write_all(b"OXLI")?;
         wtr.write_u8(4)?; // version
         wtr.write_u8(2)?; // ht_type
         wtr.write_u32::<LittleEndian>(self.ksize as u32)?; // ksize
@@ -132,7 +133,7 @@ impl Nodegraph {
         R: io::Read,
     {
         let signature = rdr.read_u32::<BigEndian>()?;
-        assert_eq!(signature, 0x4f584c49);
+        assert_eq!(signature, 0x4f58_4c49);
 
         let version = rdr.read_u8()?;
         assert_eq!(version, 0x04);
@@ -152,7 +153,7 @@ impl Nodegraph {
 
             let mut counts = FixedBitSet::with_capacity(tablesize);
             for pos in 0..byte_size {
-                let mut byte = rdr.read_u8()?;
+                let byte = rdr.read_u8()?;
                 if byte == 0 {
                     continue;
                 }
@@ -178,7 +179,8 @@ impl Nodegraph {
     }
 
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Nodegraph, Error> {
-        Ok(Nodegraph::from_reader(&mut File::open(path)?)?)
+        let mut reader = io::BufReader::new(File::open(path)?);
+        Ok(Nodegraph::from_reader(&mut reader)?)
     }
 
     pub fn tablesizes(&self) -> Vec<usize> {
@@ -193,6 +195,33 @@ impl Nodegraph {
     pub fn unique_kmers(&self) -> usize {
         self.unique_kmers
     }
+
+    pub fn similarity(&self, other: &Nodegraph) -> f64 {
+        let result: usize = self
+            .bs
+            .iter()
+            .zip(&other.bs)
+            .map(|(bs, bs_other)| bs.intersection(bs_other).count())
+            .sum();
+        let size: usize = self
+            .bs
+            .iter()
+            .zip(&other.bs)
+            .map(|(bs, bs_other)| bs.union(bs_other).count())
+            .sum();
+        result as f64 / size as f64
+    }
+
+    pub fn containment(&self, other: &Nodegraph) -> f64 {
+        let result: usize = self
+            .bs
+            .iter()
+            .zip(&other.bs)
+            .map(|(bs, bs_other)| bs.intersection(bs_other).count())
+            .sum();
+        let size: usize = self.bs.iter().map(|bs| bs.len()).sum();
+        result as f64 / size as f64
+    }
 }
 
 #[cfg(test)]
@@ -202,8 +231,9 @@ mod test {
     use std::path::PathBuf;
 
     use proptest::num::u64;
+    use proptest::{prop_assert, prop_assert_eq, prop_assume, proptest, proptest_helper};
 
-    proptest!{
+    proptest! {
       #[test]
       fn count_and_get(hash in u64::ANY) {
           let mut ng: Nodegraph = Nodegraph::new(&[10], 3);
@@ -224,7 +254,7 @@ mod test {
 
     #[test]
     fn load_save_nodegraph() {
-        let data: &[u8] = include_bytes!("../tests/data/internal.0");
+        let data: &[u8] = include_bytes!("../../tests/data/internal.0");
         let mut reader = BufReader::new(data);
 
         let ng: Nodegraph = Nodegraph::from_reader(&mut reader).expect("Loading error");
@@ -784,7 +814,7 @@ mod test {
             802340523858506,
             803596407436267,
         ]
-            .iter()
+        .iter()
         {
             assert_eq!(ng.get(*h), 1);
         }

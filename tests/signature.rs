@@ -1,5 +1,5 @@
-extern crate serde_json;
-extern crate sourmash;
+use serde_json;
+
 
 use std::fs::File;
 use std::io::BufReader;

@@ -8,8 +8,8 @@ use std::slice;
 use std::str;
 use std::thread;
 
-use errors::SourmashErrorCode;
-use failure::Error;
+use crate::errors::SourmashErrorCode;
+use failure::{Error, Fail};
 
 thread_local! {
     pub static LAST_ERROR: RefCell<Option<Error>> = RefCell::new(None);

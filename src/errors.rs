@@ -1,4 +1,4 @@
-use failure::Error;
+use failure::{Error, Fail};
 
 #[derive(Debug, Fail)]
 pub enum SourmashError {
@@ -18,10 +18,7 @@ pub enum SourmashError {
     #[fail(display = "mismatch in seed; comparison fail")]
     MismatchSeed,
 
-    #[fail(
-        display = "invalid DNA character in input k-mer: {}",
-        message
-    )]
+    #[fail(display = "invalid DNA character in input k-mer: {}", message)]
     InvalidDNA { message: String },
 
     #[fail(display = "invalid protein character in input: {}", message)]
@@ -55,8 +52,8 @@ pub enum SourmashErrorCode {
 impl SourmashErrorCode {
     pub fn from_error(error: &Error) -> SourmashErrorCode {
         for cause in error.iter_chain() {
-            use utils::Panic;
-            if let Some(_) = cause.downcast_ref::<Panic>() {
+            use crate::utils::Panic;
+            if cause.downcast_ref::<Panic>().is_some() {
                 return SourmashErrorCode::Panic;
             }
 
@@ -71,8 +68,6 @@ impl SourmashErrorCode {
                     SourmashError::InvalidProt { .. } => SourmashErrorCode::InvalidProt,
                 };
             }
-            /*
-             */
         }
         SourmashErrorCode::Unknown
     }
