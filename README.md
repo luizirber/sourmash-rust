@@ -1,3 +1,10 @@
+# ARCHIVED!
+
+We are in the process of merging this into the main sourmash codebase, so this code now
+lives under https://github.com/dib-lab/sourmash
+
+Initial pull of this code into sourmash: https://github.com/dib-lab/sourmash/pull/424
+
 <meta charset="utf-8"/>
 
 # sourmash-rust
