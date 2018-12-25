@@ -42,6 +42,8 @@ main() {
            --git japaric/cross \
            --tag $tag \
            --target $target
+
+    cargo install kcov
 }
 
 main
